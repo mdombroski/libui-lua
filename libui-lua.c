@@ -1,6 +1,9 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+// simplifies getters/setters
+#define luaL_checkboolean( L, i ) lua_toboolean( L, i )
+
 #include <ui.h>
 
 #ifndef MODULE_API
@@ -20,34 +23,37 @@ static uiInitOptions init_options;
 
 enum
 {
-	control_window = 0xAA1,
-	control_button = 0xAA2,
-	control_box = 0xAA3,
-	control_checkbox = 0xAA4,
-	control_entry = 0xAA5,
-	control_label = 0xAA6,
-	control_tab = 0xAA7,
-	control_group = 0xAA8,
-	control_spinbox = 0xAA9,
-	control_progressbar = 0xAAA,
-	control_slider = 0xAAB,
-	control_separator = 0xAAC,
-	control_combobox = 0xAAD,
-	control_radiobuttons = 0xAAE,
-	control_datetimepicker = 0xAAF,
-	control_multilineentry = 0xAB0,
-	control_menu = 0xAB1,
-	control_menuitem = 0xAB2,
-	control_area = 0xAB3,
-	control_fontbutton = 0xAB4,
-	control_colorbutton = 0xAB5,
+    control_uiControl = 0,
+	control_uiWindow = 0xAA1,
+	control_uiButton = 0xAA2,
+	control_uiBox = 0xAA3,
+	control_uiCheckbox = 0xAA4,
+	control_uiEntry = 0xAA5,
+	control_uiLabel = 0xAA6,
+	control_uiTab = 0xAA7,
+	control_uiGroup = 0xAA8,
+	control_uiSpinbox = 0xAA9,
+	control_uiProgressBar = 0xAAA,
+	control_uiSlider = 0xAAB,
+	control_uiSeparator = 0xAAC,
+	control_uiCombobox = 0xAAD,
+	control_uiRadioButtons = 0xAAE,
+	control_uiDateTimePicker = 0xAAF,
+	control_uiMultilineEntry = 0xAB0,
+	control_uiMenu = 0xAB1,
+	control_uiMenuItem = 0xAB2,
+	control_uiArea = 0xAB3,
+	control_uiFontButton = 0xAB4,
+	control_uiColorButton = 0xAB5,
 
 	callback_shouldquit = 0xDA0,
-	callback_clicked = 0xDA1,
-	callback_onclosing = 0xDA2,
-	callback_toggled = 0xDA3,
-	callback_changed = 0xDA4,
-	callback_selected = 0xDA5,
+
+	callback_ShouldQuit = 0xDA0,
+	callback_OnClosing = 0xDA1,
+	callback_OnClicked = 0xDA2,
+	callback_OnToggled = 0xDA3,
+	callback_OnChanged = 0xDA4,
+	callback_OnSelected = 0xDA5,
 };
 
 
@@ -76,7 +82,7 @@ static void invoke_callback( lua_State* L, void* id, int type )
 {
 	if( L )
 	{
-		lua_pushlightuserdata( L, id );
+	    lua_pushlightuserdata( L, id );
 		lua_gettable( L, LUA_REGISTRYINDEX );
 		lua_pushinteger( L, type );
 		lua_gettable( L, -2 );
@@ -89,6 +95,63 @@ static void invoke_callback( lua_State* L, void* id, int type )
 	}
 }
 
+#define DECLARE_CALLBACK_1( typename, action ) \
+    static void callback_ ## typename ## action( typename *c, void* data ) { \
+        invoke_callback( (lua_State*) data, c, callback_ ## action ); \
+    }
+#define DECLARE_CALLBACK_2( typename, action ) \
+    static int l_ ## typename ## action( lua_State* L ) { \
+        typename* c = (typename*) check_control( L, 1, control_ ## typename ); \
+        if( c ) \
+        { \
+            register_callback( L, 2, c, callback_ ## action ); \
+            if( lua_type( L, 2 ) == LUA_TFUNCTION ) \
+            { \
+                typename ## action( c, callback_ ## typename ## action, L ); \
+            } \
+            else \
+            { \
+                typename ## action( c, NULL, NULL ); \
+            } \
+            lua_pushvalue( L, 1 ); \
+            return 1; \
+        } \
+        return 0; \
+    }
+#define DECLARE_CALLBACK( typename, action ) \
+    DECLARE_CALLBACK_1( typename, action ) \
+    DECLARE_CALLBACK_2( typename, action )
+
+#define DECLARE_SETTER( typename, action, type ) \
+    int l_ ## typename ## action( lua_State* L ) { \
+        typename* c = (typename*) check_control( L, 1, control_ ## typename ); \
+        if( c ) { \
+            typename ## action( c, luaL_check ## type ( L, 2 ) ); \
+            lua_pushvalue( L, 1 ); \
+            return 1; \
+        } \
+        return 0; \
+    }
+
+#define DECLARE_GETTER( typename, action, type ) \
+    int l_ ## typename ## action( lua_State* L ) { \
+        typename* c = (typename*) check_control( L, 1, control_ ## typename ); \
+        if( c ) { \
+            lua_push ## type ( L, typename ## action ( c ) ); \
+            return 1; \
+        } \
+        return 0; \
+    }
+
+#define DECLARE_ACTION( typename, action ) \
+    int l_ ## typename ## action( lua_State* L ) { \
+        typename* c = (typename*) check_control( L, 1, control_ ## typename ); \
+        if( c ) { \
+            typename ## action ( c ); \
+            lua_pushvalue( L, 1 ); \
+        } \
+        return 0; \
+    }
 
 static int uimain( lua_State* L )
 {
@@ -139,6 +202,11 @@ struct control_userdata
 
 static uiControl* check_control( lua_State* L, int idx, int type )
 {
+    if( lua_type( L, idx ) != LUA_TUSERDATA )
+    {
+        return 0;
+    }
+
 	struct control_userdata* c = lua_touserdata( L, idx );
 	if( c )
 	{
@@ -147,6 +215,7 @@ static uiControl* check_control( lua_State* L, int idx, int type )
 			return c->control;
 		}
 	}
+
 	return 0;
 }
 
@@ -163,16 +232,7 @@ static int control_destroy( lua_State* L )
 	return 0;
 }
 
-static int control_handle( lua_State* L )
-{
-	uiControl* c = check_control( L, -1, 0 );
-	if( c )
-	{
-		lua_pushinteger( L, uiControlHandle( c ) );
-		return 1;
-	}
-	return 0;
-}
+DECLARE_GETTER( uiControl, Handle, integer )
 
 static int control_parent( lua_State* L )
 {
@@ -221,73 +281,12 @@ static int control_toplevel( lua_State* L )
 	return 0;
 }
 
-static int control_visible( lua_State* L )
-{
-	uiControl* c = check_control( L, -1, 0 );
-	if( c )
-	{
-		lua_pushboolean( L, uiControlVisible( c ) );
-		return 1;
-	}
-
-	return 0;
-}
-
-static int control_show( lua_State* L )
-{
-	uiControl* c = check_control( L, -1, 0 );
-	if( c )
-	{
-		uiControlShow( c );
-	}
-
-	return 0;
-}
-
-static int control_hide( lua_State* L )
-{
-	uiControl* c = check_control( L, -1, 0 );
-	if( c )
-	{
-		uiControlHide( c );
-	}
-
-	return 0;
-}
-
-static int control_enabled( lua_State* L )
-{
-	uiControl* c = check_control( L, -1, 0 );
-	if( c )
-	{
-		lua_pushboolean( L, uiControlEnabled( c ) );
-		return 1;
-	}
-
-	return 0;
-}
-
-static int control_enable( lua_State* L )
-{
-	uiControl* c = check_control( L, -1, 0 );
-	if( c )
-	{
-		uiControlEnable( c );
-	}
-
-	return 0;
-}
-
-static int control_disable( lua_State* L )
-{
-	uiControl* c = check_control( L, -1, 0 );
-	if( c )
-	{
-		uiControlDisable( c );
-	}
-
-	return 0;
-}
+DECLARE_GETTER( uiControl, Visible, boolean )
+DECLARE_ACTION( uiControl, Show )
+DECLARE_ACTION( uiControl, Hide )
+DECLARE_GETTER( uiControl, Enabled, boolean )
+DECLARE_ACTION( uiControl, Enable )
+DECLARE_ACTION( uiControl, Disable )
 
 static int control_free( lua_State* L )
 {
@@ -316,16 +315,16 @@ static int control_enabledtouser( lua_State* L )
 luaL_Reg control_common[] =
 {
 	{ "Destroy", control_destroy },
-	{ "Handle", control_handle },
+	{ "Handle", l_uiControlHandle },
 	{ "Parent", control_parent },
 	{ "SetParent", control_setparent },
 	{ "TopLevel", control_toplevel },
-	{ "Visible", control_visible },
-	{ "Show", control_show },
-	{ "Hide", control_hide },
-	{ "Enabled", control_enabled },
-	{ "Enable", control_enable },
-	{ "Disable", control_disable },
+	{ "Visible", l_uiControlVisible },
+	{ "Show", l_uiControlShow },
+	{ "Hide", l_uiControlHide },
+	{ "Enabled", l_uiControlEnabled },
+	{ "Enable", l_uiControlEnable },
+	{ "Disable", l_uiControlDisable },
 	{ "Free", control_free },
 	{ "VerifyDestroy", control_verifydestroy },
 	{ "VerifySetParent", control_verifysetparent },
@@ -366,58 +365,22 @@ static void control_create( lua_State* L, uiControl* c, int type, luaL_Reg* func
 	lua_setmetatable( L, -2 );
 }
 
-
-static int window_title( lua_State* L )
+static int callback_uiWindowOnClosing( uiWindow* w, void* d )
 {
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
-	if( w )
-	{
-		lua_pushstring( L, uiWindowTitle( w ) );
-		return 1;
-	}
-	return 0;
+    invoke_callback( (lua_State*) d, w, callback_OnClosing );
+    return 0;
 }
 
-static int window_settitle( lua_State* L )
-{
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
-	if( w )
-	{
-		uiWindowSetTitle( w, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
-
-static int window_onclosing_callback( uiWindow* c, void* data )
-{
-	invoke_callback( (lua_State*) data, c, callback_onclosing );
-	return 0;
-}
-
-static int window_onclosing( lua_State* L )
-{
-	// TODO
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
-	if( w )
-	{
-		register_callback( L, 2, w, callback_onclosing );
-
-		if( lua_type( L, 2 ) == LUA_TFUNCTION )
-		{
-			uiWindowOnClosing( w, window_onclosing_callback, L );
-		}
-		else
-		{
-			uiWindowOnClosing( w, NULL, NULL );
-		}
-	}
-	return 0;
-}
+DECLARE_GETTER( uiWindow, Title, string )
+DECLARE_SETTER( uiWindow, SetTitle, string )
+DECLARE_GETTER( uiWindow, Margined, boolean)
+DECLARE_SETTER( uiWindow, SetMargined, boolean )
+DECLARE_CALLBACK_2( uiWindow, OnClosing )
 
 static int window_setchild( lua_State* L )
 {
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
-	uiControl* c = (uiControl*) check_control( L, 2, 0 );
+	uiWindow* w = (uiWindow*) check_control( L, 1, control_uiWindow );
+	uiControl* c = (uiControl*) check_control( L, 2, control_uiControl );
 	if( w && c && ( uiControl(w) != c ) )
 	{
 		uiWindowSetChild( w, c );
@@ -425,104 +388,43 @@ static int window_setchild( lua_State* L )
 	return 0;
 }
 
-static int window_margined( lua_State* L )
-{
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
-	if( w )
-	{
-		lua_pushboolean( L, uiWindowMargined( w ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int window_setmargined( lua_State* L )
-{
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
-	if( w )
-	{
-		uiWindowSetMargined( w, lua_toboolean( L, 2 ) );
-	}
-	return 0;
-}
 
 static luaL_Reg window_functions[] =
 {
-	{ "Title", window_title },
-	{ "SetTitle", window_settitle },
-	{ "Margined", window_margined },
-	{ "SetMargined", window_setmargined },
+	{ "Title", l_uiWindowTitle },
+	{ "SetTitle", l_uiWindowSetTitle },
+	{ "Margined", l_uiWindowMargined },
+	{ "SetMargined", l_uiWindowSetMargined },
 	{ "SetChild", window_setchild },
-	{ "OnClosing", window_onclosing },
+	{ "OnClosing", l_uiWindowOnClosing },
 	{ 0, 0 }
 };
 
 static int new_window( lua_State* L )
 {
 	uiWindow* w = uiNewWindow( luaL_optlstring( L, 1, "Lua", NULL ), luaL_optinteger( L, 2, 640 ), luaL_optinteger( L, 3, 480 ), lua_toboolean( L, 4 ) );
-	control_create( L, (uiControl*) w, control_window, window_functions );
+	control_create( L, (uiControl*) w, control_uiWindow, window_functions );
 
 	return 1;
 }
 
 
-static int button_text( lua_State* L )
-{
-	uiButton* b = (uiButton*) check_control( L, 1, control_button );
-	if( b )
-	{
-		lua_pushstring( L, uiButtonText( b ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int button_settext( lua_State* L )
-{
-	uiButton* b = (uiButton*) check_control( L, 1, control_button );
-	if( b )
-	{
-		uiButtonSetText( b, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
-
-static void button_clicked_callback( uiButton* c, void* data )
-{
-	invoke_callback( (lua_State*) data, c, callback_clicked );
-}
-
-static int button_onclicked( lua_State* L )
-{
-	uiButton* b = (uiButton*) check_control( L, 1, control_button );
-	if( b )
-	{
-		register_callback( L, 2, b, callback_clicked );
-
-		if( lua_type( L, 2 ) == LUA_TFUNCTION )
-		{
-			uiButtonOnClicked( b, button_clicked_callback, L );
-		}
-		else
-		{
-			uiButtonOnClicked( b, NULL, NULL );
-		}
-	}
-	return 0;
-}
+DECLARE_GETTER( uiButton, Text, string )
+DECLARE_SETTER( uiButton, SetText, string )
+DECLARE_CALLBACK( uiButton, OnClicked )
 
 static luaL_Reg button_functions[] =
 {
-	{ "Text", button_text },
-	{ "SetText", button_settext },
-	{ "OnClicked", button_onclicked },
+	{ "Text", l_uiButtonText },
+	{ "SetText", l_uiButtonSetText },
+	{ "OnClicked", l_uiButtonOnClicked },
 	{ 0, 0 }
 };
 
 static int new_button( lua_State* L )
 {
 	uiButton* b = uiNewButton( luaL_optlstring( L, 1, "Button", NULL ) );
-	control_create( L, (uiControl*) b, control_button, button_functions );
+	control_create( L, (uiControl*) b, control_uiButton, button_functions );
 
 	return 1;
 }
@@ -530,272 +432,110 @@ static int new_button( lua_State* L )
 
 static int box_append( lua_State* L )
 {
-	uiBox* b = (uiBox*) check_control( L, 1, control_box );
-	uiControl* o = (uiControl*) check_control( L, 2, 0 );
+	uiBox* b = (uiBox*) check_control( L, 1, control_uiBox );
+	uiControl* o = (uiControl*) check_control( L, 2, control_uiControl );
 	if( b && o )
 	{
 		uiBoxAppend( b, o, lua_toboolean( L, 3 ) );
-	}
-	return 0;
-}
-
-static int box_delete( lua_State* L )
-{
-	uiBox* b = (uiBox*) check_control( L, 1, control_box );
-	if( b )
-	{
-		uiBoxDelete( b, luaL_checkinteger( L, 2 ) );
-	}
-	return 0;
-}
-
-static int box_padded( lua_State* L )
-{
-	uiBox* b = (uiBox*) check_control( L, 1, control_box );
-	if( b )
-	{
-		lua_pushboolean( L, uiBoxPadded( b ) );
+		lua_pushvalue( L, 1 );
 		return 1;
 	}
 	return 0;
 }
 
-static int box_setpadded( lua_State* L )
-{
-	uiBox* b = (uiBox*) check_control( L, 1, control_box );
-	if( b )
-	{
-		uiBoxSetPadded( b, lua_toboolean( L, 2 ) );
-	}
-	return 0;
-}
+DECLARE_GETTER( uiBox, Padded, boolean )
+DECLARE_SETTER( uiBox, SetPadded, boolean )
+DECLARE_SETTER( uiBox, Delete, integer )
 
 luaL_Reg box_functions[] =
 {
 	{ "Append", box_append },
-	{ "Delete", box_delete },
-	{ "Padded", box_padded },
-	{ "SetPadded", box_setpadded },
+	{ "Delete", l_uiBoxDelete },
+	{ "Padded", l_uiBoxPadded },
+	{ "SetPadded", l_uiBoxSetPadded },
 	{ 0, 0 }
 };
 
 static int new_hbox( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewHorizontalBox(), control_box, box_functions );
+	control_create( L, (uiControl*) uiNewHorizontalBox(), control_uiBox, box_functions );
 	return 1;
 }
 
 static int new_vbox( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewVerticalBox(), control_box, box_functions );
+	control_create( L, (uiControl*) uiNewVerticalBox(), control_uiBox, box_functions );
 	return 1;
 }
 
 
-static int checkbox_text( lua_State* L )
-{
-	uiCheckbox* c = (uiCheckbox*) check_control( L, 1, control_checkbox );
-	if( c )
-	{
-		lua_pushstring( L, uiCheckboxText( c ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int checkbox_settext( lua_State* L )
-{
-	uiCheckbox* c = (uiCheckbox*) check_control( L, 1, control_checkbox );
-	if( c )
-	{
-		uiCheckboxSetText( c, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
-
-static void checkbox_toggled_callback( uiCheckbox* c, void* d )
-{
-	invoke_callback( (lua_State*) d, c, callback_toggled );
-}
-
-static int checkbox_ontoggled( lua_State* L )
-{
-	uiCheckbox* c = (uiCheckbox*) check_control( L, 1, control_checkbox );
-	if( c )
-	{
-		register_callback( L, 2, c, callback_toggled );
-
-		if( lua_type( L, 2 ) == LUA_TFUNCTION )
-		{
-			uiCheckboxOnToggled( c, checkbox_toggled_callback, L );
-		}
-		else
-		{
-			uiCheckboxOnToggled( c, NULL, NULL );
-		}
-	}
-	return 0;
-}
-
-static int checkbox_checked( lua_State* L )
-{
-	uiCheckbox* c = (uiCheckbox*) check_control( L, 1, control_checkbox );
-	if( c )
-	{
-		lua_pushboolean( L, uiCheckboxChecked( c ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int checkbox_setchecked( lua_State* L )
-{
-	uiCheckbox* c = (uiCheckbox*) check_control( L, 1, control_checkbox );
-	if( c )
-	{
-		uiCheckboxSetChecked( c, lua_toboolean( L, 2 ) );
-	}
-	return 0;
-}
+DECLARE_GETTER( uiCheckbox, Text, string )
+DECLARE_SETTER( uiCheckbox, SetText, string )
+DECLARE_GETTER( uiCheckbox, Checked, boolean )
+DECLARE_SETTER( uiCheckbox, SetChecked, boolean )
+DECLARE_CALLBACK( uiCheckbox, OnToggled )
 
 luaL_Reg checkbox_functions[] =
 {
-	{ "Text", checkbox_text },
-	{ "SetText", checkbox_settext },
-	{ "OnToggled", checkbox_ontoggled },
-	{ "Checked", checkbox_checked },
-	{ "SetChecked", checkbox_setchecked },
+	{ "Text", l_uiCheckboxText },
+	{ "SetText", l_uiCheckboxSetText },
+	{ "OnToggled", l_uiCheckboxOnToggled },
+	{ "Checked", l_uiCheckboxChecked },
+	{ "SetChecked", l_uiCheckboxSetChecked },
 	{ 0, 0 }
 };
 
 static int new_checkbox( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewCheckbox( luaL_optlstring( L, 1, "Checkbox", NULL ) ), control_checkbox, checkbox_functions );
+	control_create( L, (uiControl*) uiNewCheckbox( luaL_optlstring( L, 1, "Checkbox", NULL ) ), control_uiCheckbox, checkbox_functions );
 	return 1;
 }
 
 
-static int entry_text( lua_State* L )
-{
-	uiEntry* c = (uiEntry*) check_control( L, 1, control_entry );
-	if( c )
-	{
-		lua_pushstring( L, uiEntryText( c ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int entry_settext( lua_State* L )
-{
-	uiEntry* c = (uiEntry*) check_control( L, 1, control_entry );
-	if( c )
-	{
-		uiEntrySetText( c, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
-
-static void entry_onchanged_callback( uiEntry* e, void* d )
-{
-	invoke_callback( (lua_State*) d, e, callback_changed );
-}
-
-static int entry_onchanged( lua_State* L )
-{
-	uiEntry* c = (uiEntry*) check_control( L, 1, control_entry );
-	if( c )
-	{
-		register_callback( L, 2, c, callback_changed );
-
-		if( lua_type( L, 2 ) == LUA_TFUNCTION )
-		{
-			uiEntryOnChanged( c, entry_onchanged_callback, L );
-		}
-		else
-		{
-			uiEntryOnChanged( c, NULL, NULL );
-		}
-	}
-	return 0;
-}
-
-static int entry_readonly( lua_State* L )
-{
-	uiEntry* c = (uiEntry*) check_control( L, 1, control_entry );
-	if( c )
-	{
-		lua_pushboolean( L, uiEntryReadOnly( c ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int entry_setreadonly( lua_State* L )
-{
-	uiEntry* c = (uiEntry*) check_control( L, 1, control_entry );
-	if( c )
-	{
-		uiEntrySetReadOnly( c, lua_toboolean( L, 2 ) );
-	}
-	return 0;
-}
+DECLARE_GETTER( uiEntry, Text, string )
+DECLARE_SETTER( uiEntry, SetText, string )
+DECLARE_GETTER( uiEntry, ReadOnly, boolean )
+DECLARE_SETTER( uiEntry, SetReadOnly, boolean )
+DECLARE_CALLBACK( uiEntry, OnChanged )
 
 luaL_Reg entry_functions[] =
 {
-	{ "Text", entry_text },
-	{ "SetText", entry_settext },
-	{ "OnChanged", entry_onchanged },
-	{ "ReadOnly", entry_readonly },
-	{ "SetReadOnly", entry_setreadonly },
+	{ "Text", l_uiEntryText },
+	{ "SetText", l_uiEntrySetText },
+	{ "OnChanged", l_uiEntryOnChanged },
+	{ "ReadOnly", l_uiEntryReadOnly },
+	{ "SetReadOnly", l_uiEntrySetReadOnly },
 	{ 0, 0 }
 };
 
 static int new_entry( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewEntry(), control_entry, entry_functions );
+	control_create( L, (uiControl*) uiNewEntry(), control_uiEntry, entry_functions );
 	return 1;
 }
 
-static int label_text( lua_State* L )
-{
-	uiLabel* c = (uiLabel*) check_control( L, 1, control_label );
-	if( c )
-	{
-		lua_pushstring( L, uiLabelText( c ) );
-		return 1;
-	}
-	return 0;
-}
 
-static int label_settext( lua_State* L )
-{
-	uiLabel* c = (uiLabel*) check_control( L, 1, control_label );
-	if( c )
-	{
-		uiLabelSetText( c, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
+DECLARE_GETTER( uiLabel, Text, string )
+DECLARE_SETTER( uiLabel, SetText, string )
 
 luaL_Reg label_functions[] =
 {
-	{ "Text", label_text },
-	{ "SetText", label_settext },
+	{ "Text", l_uiLabelText },
+	{ "SetText", l_uiLabelSetText },
 	{ 0, 0 }
 };
 
 static int new_label( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewLabel( luaL_optlstring( L, 1, "Label", NULL ) ), control_label, label_functions );
+	control_create( L, (uiControl*) uiNewLabel( luaL_optlstring( L, 1, "Label", NULL ) ), control_uiLabel, label_functions );
 	return 1;
 }
 
 
 static int tab_append( lua_State* L )
 {
-	uiTab* t = (uiTab*) check_control( L, 1, control_tab );
-	uiControl* c = check_control( L, 3, 0 );
+	uiTab* t = (uiTab*) check_control( L, 1, control_uiTab );
+	uiControl* c = check_control( L, 3, control_uiControl );
 
 	if( t && c )
 	{
@@ -807,8 +547,8 @@ static int tab_append( lua_State* L )
 
 static int tab_insert( lua_State* L )
 {
-	uiTab* t = (uiTab*) check_control( L, 1, control_tab );
-	uiControl* c = check_control( L, 4, 0 );
+	uiTab* t = (uiTab*) check_control( L, 1, control_uiTab );
+	uiControl* c = check_control( L, 4, control_uiControl );
 
 	if( t && c )
 	{
@@ -818,30 +558,12 @@ static int tab_insert( lua_State* L )
 	return 0;
 }
 
-static int tab_delete( lua_State* L )
-{
-	uiTab* t = (uiTab*) check_control( L, 1, control_tab );
-	if( t )
-	{
-		uiTabDelete( t, luaL_checkinteger( L, 2 ) );
-	}
-	return 0;
-}
+DECLARE_SETTER( uiTab, Delete, integer )
+DECLARE_GETTER( uiTab, NumPages, integer )
 
-static int tab_numpages( lua_State* L )
+static int l_uiTabMargined( lua_State* L )
 {
-	uiTab* t = (uiTab*) check_control( L, 1, control_tab );
-	if( t )
-	{
-		lua_pushinteger( L, uiTabNumPages( t ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int tab_margined( lua_State* L )
-{
-	uiTab* t = (uiTab*) check_control( L, 1, control_tab );
+	uiTab* t = (uiTab*) check_control( L, 1, control_uiTab );
 	if( t )
 	{
 		lua_pushboolean( L, uiTabMargined( t, luaL_checkinteger( L, 2 ) ) );
@@ -849,12 +571,14 @@ static int tab_margined( lua_State* L )
 	return 0;
 }
 
-static int tab_setmargined( lua_State* L )
+static int l_uiTabSetMargined( lua_State* L )
 {
-	uiTab* t = (uiTab*) check_control( L, 1, control_tab );
+	uiTab* t = (uiTab*) check_control( L, 1, control_uiTab );
 	if( t )
 	{
 		uiTabSetMargined( t, luaL_checkinteger( L, 2 ), lua_toboolean( L, 3 ) );
+		lua_pushvalue( L, 1 );
+		return 1;
 	}
 	return 0;
 }
@@ -863,45 +587,29 @@ static luaL_Reg tab_functions[] =
 {
 	{ "Append", tab_append },
 	{ "Insert", tab_insert },
-	{ "Delete", tab_delete },
-	{ "NumPages", tab_numpages },
-	{ "Margined", tab_margined },
-	{ "SetMargined", tab_setmargined },
+	{ "Delete", l_uiTabDelete },
+	{ "NumPages", l_uiTabNumPages },
+	{ "Margined", l_uiTabMargined },
+	{ "SetMargined", l_uiTabSetMargined },
 	{ 0, 0 }
 };
 
 static int new_tab( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewTab(), control_tab, tab_functions );
+	control_create( L, (uiControl*) uiNewTab(), control_uiTab, tab_functions );
 	return 1;
 }
 
 
-static int group_title( lua_State* L )
-{
-	uiGroup* g = (uiGroup*) check_control( L, 1, control_group );
-	if( g )
-	{
-		lua_pushstring( L, uiGroupTitle( g ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int group_settitle( lua_State* L )
-{
-	uiGroup* g = (uiGroup*) check_control( L, 1, control_group );
-	if( g )
-	{
-		uiGroupSetTitle( g, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
+DECLARE_GETTER( uiGroup, Title, string )
+DECLARE_SETTER( uiGroup, SetTitle, string )
+DECLARE_GETTER( uiGroup, Margined, boolean )
+DECLARE_SETTER( uiGroup, SetMargined, boolean )
 
 static int group_setchild( lua_State* L )
 {
-	uiGroup* g = (uiGroup*) check_control( L, 1, control_group );
-	uiControl* c = check_control( L, 2, 0 );
+	uiGroup* g = (uiGroup*) check_control( L, 1, control_uiGroup );
+	uiControl* c = check_control( L, 2, control_uiControl );
 	if( g && c )
 	{
 		uiGroupSetChild( g, c );
@@ -909,241 +617,94 @@ static int group_setchild( lua_State* L )
 	return 0;
 }
 
-static int group_margined( lua_State* L )
-{
-	uiGroup* g = (uiGroup*) check_control( L, 1, control_group );
-	if( g )
-	{
-		lua_pushboolean( L, uiGroupMargined( g ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int group_setmargined( lua_State* L )
-{
-	uiGroup* g = (uiGroup*) check_control( L, 1, control_group );
-	if( g )
-	{
-		uiGroupSetMargined( g, lua_toboolean( L, 2 ) );
-	}
-	return 0;
-}
-
 static luaL_Reg group_functions[] =
 {
-	{ "Title", group_title },
-	{ "SetTitle", group_settitle },
+	{ "Title", l_uiGroupTitle },
+	{ "SetTitle", l_uiGroupSetTitle },
 	{ "SetChild", group_setchild },
-	{ "Margined", group_margined },
-	{ "SetMargined", group_setmargined },
+	{ "Margined", l_uiGroupMargined },
+	{ "SetMargined", l_uiGroupSetMargined },
 	{ 0, 0 }
 };
 
 static int new_group( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewGroup( luaL_optlstring( L, 1, "Label", NULL ) ), control_group, group_functions );
+	control_create( L, (uiControl*) uiNewGroup( luaL_optlstring( L, 1, "Label", NULL ) ), control_uiGroup, group_functions );
 	return 1;
 }
 
 
-static int spinbox_value( lua_State* L )
-{
-	uiSpinbox* s = (uiSpinbox*) check_control( L, 1, control_spinbox );
-	if( s )
-	{
-		lua_pushinteger( L, uiSpinboxValue( s ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int spinbox_setvalue( lua_State* L )
-{
-	uiSpinbox* s = (uiSpinbox*) check_control( L, 1, control_spinbox );
-	if( s )
-	{
-		uiSpinboxSetValue( s, luaL_checkinteger( L, 2 ) );
-	}
-	return 0;
-}
-
-static void spinbox_changed_callback( uiSpinbox* s, void* d )
-{
-	printf( "spinbox change\n" );
-	invoke_callback( (lua_State*) d, s, callback_changed );
-}
-
-static int spinbox_onchanged( lua_State* L )
-{
-	uiSpinbox* s = (uiSpinbox*) check_control( L, 1, control_spinbox );
-	if( s )
-	{
-		register_callback( L, 2, s, callback_changed );
-		if( lua_isfunction( L, 2 ) )
-			uiSpinboxOnChanged( s, spinbox_changed_callback, L );
-		else
-			uiSpinboxOnChanged( s, NULL, NULL );
-	}
-	return 0;
-}
+DECLARE_GETTER( uiSpinbox, Value, integer )
+DECLARE_SETTER( uiSpinbox, SetValue, integer )
+DECLARE_CALLBACK( uiSpinbox, OnChanged )
 
 static luaL_Reg spinbox_functions[] =
 {
-	{ "Value", spinbox_value },
-	{ "SetValue", spinbox_setvalue },
-	{ "OnChanged", spinbox_onchanged },
+	{ "Value", l_uiSpinboxValue },
+	{ "SetValue", l_uiSpinboxSetValue },
+	{ "OnChanged", l_uiSpinboxOnChanged },
 	{ 0, 0 }
 };
 
 static int new_spinbox( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewSpinbox( luaL_optinteger( L, 1, 0 ), luaL_optinteger( L, 2, 100 ) ), control_spinbox, spinbox_functions );
+	control_create( L, (uiControl*) uiNewSpinbox( luaL_optinteger( L, 1, 0 ), luaL_optinteger( L, 2, 100 ) ), control_uiSpinbox, spinbox_functions );
 	return 1;
 }
 
 
-static int progress_setvalue( lua_State* L )
-{
-	uiProgressBar* b = (uiProgressBar*) check_control( L, 1, control_progressbar );
-	if( b )
-	{
-		uiProgressBarSetValue( b, luaL_checkinteger( L, 2 ) );
-	}
-	return 0;
-}
+DECLARE_SETTER( uiProgressBar, SetValue, integer )
 
 static luaL_Reg progress_functions[] =
 {
-	{ "SetValue", progress_setvalue },
+	{ "SetValue", l_uiProgressBarSetValue },
 	{ 0, 0 }
 };
 
 static int new_progress( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewProgressBar(), control_progressbar, progress_functions );
+	control_create( L, (uiControl*) uiNewProgressBar(), control_uiProgressBar, progress_functions );
 	return 1;
 }
 
 
-static int slider_value( lua_State* L )
-{
-	uiSlider* s = (uiSlider*) check_control( L, 1, control_slider );
-	if( s )
-	{
-		lua_pushinteger( L, uiSliderValue( s ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int slider_setvalue( lua_State* L )
-{
-	uiSlider* s = (uiSlider*) check_control( L, 1, control_slider );
-	if( s )
-	{
-		uiSliderSetValue( s, luaL_checkinteger( L, 2 ) );
-	}
-	return 0;
-}
-
-static void slider_changed_callback( uiSlider* s, void* d )
-{
-	invoke_callback( (lua_State*) d, s, callback_changed );
-}
-
-static int slider_onchanged( lua_State* L )
-{
-	uiSlider* s = (uiSlider*) check_control( L, 1, control_slider );
-	if( s )
-	{
-		register_callback( L, 2, s, callback_changed );
-		if( lua_isfunction( L, 2 ) )
-			uiSliderOnChanged( s, slider_changed_callback, L );
-		else
-			uiSliderOnChanged( s, NULL, NULL );
-	}
-	return 0;
-}
+DECLARE_GETTER( uiSlider, Value, integer )
+DECLARE_SETTER( uiSlider, SetValue, integer )
+DECLARE_CALLBACK( uiSlider, OnChanged )
 
 static luaL_Reg slider_functions[] =
 {
-	{ "Value", slider_value },
-	{ "SetValue", slider_setvalue },
-	{ "OnChanged", slider_onchanged },
+	{ "Value", l_uiSliderValue },
+	{ "SetValue", l_uiSliderSetValue },
+	{ "OnChanged", l_uiSliderOnChanged },
 	{ 0, 0 }
 };
 
 static int new_slider( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewSlider( luaL_optinteger( L, 1, 0 ), luaL_optinteger( L, 2, 100 ) ), control_slider, slider_functions );
+	control_create( L, (uiControl*) uiNewSlider( luaL_optinteger( L, 1, 0 ), luaL_optinteger( L, 2, 100 ) ), control_uiSlider, slider_functions );
 	return 1;
 }
 
 
 static int new_hseparator( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewHorizontalSeparator(), control_separator, 0 );
+	control_create( L, (uiControl*) uiNewHorizontalSeparator(), control_uiSeparator, 0 );
 	return 1;
 }
 
 
-static int combobox_append( lua_State* L )
-{
-	uiCombobox* s = (uiCombobox*) check_control( L, 1, control_combobox );
-	if( s )
-	{
-		uiComboboxAppend( s, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
-
-static int combobox_selected( lua_State* L )
-{
-	uiCombobox* s = (uiCombobox*) check_control( L, 1, control_combobox );
-	if( s )
-	{
-		lua_pushinteger( L, uiComboboxSelected( s ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int combobox_setselected( lua_State* L )
-{
-	uiCombobox* s = (uiCombobox*) check_control( L, 1, control_combobox );
-	if( s )
-	{
-		uiComboboxSetSelected( s, luaL_checkinteger( L, 2 ) );
-	}
-	return 0;
-}
-
-static void combobox_selected_callback( uiCombobox* c, void* d )
-{
-	invoke_callback( (lua_State*) d, c, callback_selected );
-}
-
-static int combobox_onselected( lua_State* L )
-{
-	uiCombobox* s = (uiCombobox*) check_control( L, 1, control_combobox );
-	if( s )
-	{
-		register_callback( L, 2, s, callback_selected );
-		if( lua_isfunction( L, 2 ) )
-			uiComboboxOnSelected( s, combobox_selected_callback, L );
-		else
-			uiComboboxOnSelected( s, NULL, NULL );
-	}
-	return 0;
-}
+DECLARE_SETTER( uiCombobox, Append, string )
+DECLARE_GETTER( uiCombobox, Selected, integer )
+DECLARE_SETTER( uiCombobox, SetSelected, integer )
+DECLARE_CALLBACK( uiCombobox, OnSelected )
 
 static luaL_Reg combobox_functions[] =
 {
-	{ "Append", combobox_append },
-	{ "Selected", combobox_selected },
-	{ "SetSelected", combobox_setselected },
-	{ "OnSelected", combobox_onselected },
+	{ "Append", l_uiComboboxAppend },
+	{ "Selected", l_uiComboboxSelected },
+	{ "SetSelected", l_uiComboboxSetSelected },
+	{ "OnSelected", l_uiComboboxOnSelected },
 	{ 0, 0 }
 };
 
@@ -1151,35 +712,27 @@ static int new_combobox( lua_State* L )
 {
 	if( lua_toboolean( L, 1 ) == 1 )
 	{
-		control_create( L, (uiControl*) uiNewEditableCombobox(), control_combobox, combobox_functions );
+		control_create( L, (uiControl*) uiNewEditableCombobox(), control_uiCombobox, combobox_functions );
 	}
 	else
 	{
-		control_create( L, (uiControl*) uiNewCombobox(), control_combobox, combobox_functions );
+		control_create( L, (uiControl*) uiNewCombobox(), control_uiCombobox, combobox_functions );
 	}
 	return 1;
 }
 
 
-static int radiobuttons_append( lua_State* L )
-{
-	uiRadioButtons* s = (uiRadioButtons*) check_control( L, 1, control_radiobuttons );
-	if( s )
-	{
-		uiRadioButtonsAppend( s, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
+DECLARE_SETTER( uiRadioButtons, Append, string )
 
 static luaL_Reg radiobuttons_functions[] =
 {
-	{ "Append", radiobuttons_append },
+	{ "Append", l_uiRadioButtonsAppend },
 	{ 0, 0 }
 };
 
 static int new_radiobuttons( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewRadioButtons(), control_radiobuttons, radiobuttons_functions );
+	control_create( L, (uiControl*) uiNewRadioButtons(), control_uiRadioButtons, radiobuttons_functions );
 	return 1;
 }
 
@@ -1191,268 +744,146 @@ static luaL_Reg datetimepicker_functions[] =
 
 static int new_datetimepicker( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewDateTimePicker(), control_datetimepicker, datetimepicker_functions );
+	control_create( L, (uiControl*) uiNewDateTimePicker(), control_uiDateTimePicker, datetimepicker_functions );
 	return 1;
 }
 
 static int new_timepicker( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewTimePicker(), control_datetimepicker, datetimepicker_functions );
+	control_create( L, (uiControl*) uiNewTimePicker(), control_uiDateTimePicker, datetimepicker_functions );
 	return 1;
 }
 
 static int new_datepicker( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewDatePicker(), control_datetimepicker, datetimepicker_functions );
+	control_create( L, (uiControl*) uiNewDatePicker(), control_uiDateTimePicker, datetimepicker_functions );
 	return 1;
 }
 
 
-static int multilineentry_text( lua_State* L )
-{
-	uiMultilineEntry* m = (uiMultilineEntry*) check_control( L, 1, control_multilineentry );
-	if( m )
-	{
-		lua_pushstring( L, uiMultilineEntryText( m ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int multilineentry_settext( lua_State* L )
-{
-	uiMultilineEntry* m = (uiMultilineEntry*) check_control( L, 1, control_multilineentry );
-	if( m )
-	{
-		uiMultilineEntrySetText( m, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
-
-static int multilineentry_append( lua_State* L )
-{
-	uiMultilineEntry* m = (uiMultilineEntry*) check_control( L, 1, control_multilineentry );
-	if( m )
-	{
-		uiMultilineEntryAppend( m, luaL_checkstring( L, 2 ) );
-	}
-	return 0;
-}
-
-static int multilineentry_readonly( lua_State* L )
-{
-	uiMultilineEntry* m = (uiMultilineEntry*) check_control( L, 1, control_multilineentry );
-	if( m )
-	{
-		lua_pushboolean( L, uiMultilineEntryReadOnly( m ) );
-		return 1;
-	}
-	return 0;
-}
-
-static int multilineentry_setreadonly( lua_State* L )
-{
-	uiMultilineEntry* m = (uiMultilineEntry*) check_control( L, 1, control_multilineentry );
-	if( m )
-	{
-		uiMultilineEntrySetReadOnly( m, lua_toboolean( L, 2 ) );
-	}
-	return 0;
-}
-
-static void multilineentry_changed_callback( uiMultilineEntry* m, void* d )
-{
-	invoke_callback( (lua_State*) d, m, callback_changed );
-}
-
-static int multilineentry_onchanged( lua_State* L )
-{
-	uiMultilineEntry* m = (uiMultilineEntry*) check_control( L, 1, control_multilineentry );
-	if( m )
-	{
-	    register_callback( L, 2, m, callback_changed );
-	    if( lua_isfunction( L, 2 ) )
-            uiMultilineEntryOnChanged( m, multilineentry_changed_callback, L );
-        else
-            uiMultilineEntryOnChanged( m, 0, 0 );
-	}
-	return 0;
-}
+DECLARE_GETTER( uiMultilineEntry, Text, string )
+DECLARE_SETTER( uiMultilineEntry, SetText, string )
+DECLARE_SETTER( uiMultilineEntry, Append, string )
+DECLARE_GETTER( uiMultilineEntry, ReadOnly, boolean )
+DECLARE_SETTER( uiMultilineEntry, SetReadOnly, boolean )
+DECLARE_CALLBACK( uiMultilineEntry, OnChanged )
 
 static luaL_Reg multilineentry_functions[] =
 {
-    { "Text", multilineentry_text },
-    { "SetText", multilineentry_settext },
-    { "Append", multilineentry_append },
-    { "ReadOnly", multilineentry_readonly },
-    { "SetReadOnly", multilineentry_setreadonly },
-    { "OnChanged", multilineentry_onchanged },
+    { "Text", l_uiMultilineEntryText },
+    { "SetText", l_uiMultilineEntrySetText },
+    { "Append", l_uiMultilineEntryAppend },
+    { "ReadOnly", l_uiMultilineEntryReadOnly },
+    { "SetReadOnly", l_uiMultilineEntrySetReadOnly },
+    { "OnChanged", l_uiMultilineEntryOnChanged },
 	{ 0, 0 }
 };
 
 static int new_multilineentry( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewMultilineEntry(), control_multilineentry, multilineentry_functions );
+	control_create( L, (uiControl*) uiNewMultilineEntry(), control_uiMultilineEntry, multilineentry_functions );
 	return 1;
 }
 
-
-int menuitem_enable( lua_State* L )
+static void callback_uiMenuItemOnClicked( uiMenuItem* i, uiWindow* w, void* d )
 {
-	uiMenuItem* m = (uiMenuItem*) check_control( L, 1, control_menuitem );
-	if( m )
-	{
-		uiMenuItemEnable( m );
-	}
-	return 0;
+    invoke_callback( (lua_State*) d, i, callback_OnClicked );
 }
 
-int menuitem_disable( lua_State* L )
-{
-	uiMenuItem* m = (uiMenuItem*) check_control( L, 1, control_menuitem );
-	if( m )
-	{
-		uiMenuItemDisable( m );
-	}
-	return 0;
-}
-
-int menuitem_checked( lua_State* L )
-{
-	uiMenuItem* m = (uiMenuItem*) check_control( L, 1, control_menuitem );
-	if( m )
-	{
-		lua_pushboolean( L, uiMenuItemChecked( m ) );
-		return 1;
-	}
-	return 0;
-}
-
-int menuitem_setchecked( lua_State* L )
-{
-	uiMenuItem* m = (uiMenuItem*) check_control( L, 1, control_menuitem );
-	if( m )
-	{
-		uiMenuItemSetChecked( m, lua_toboolean( L, 2 ) );
-	}
-	return 0;
-}
-
-void menuitem_clicked_callback( uiMenuItem* i, uiWindow* w, void* d )
-{
-	invoke_callback( (lua_State*) d, i, callback_clicked );
-}
-
-int menuitem_onclicked( lua_State* L )
-{
-	uiMenuItem* m = (uiMenuItem*) check_control( L, 1, control_menuitem );
-	if( m )
-	{
-		register_callback( L, 2, m, callback_clicked );
-		if( lua_isfunction( L, 2 ) )
-			uiMenuItemOnClicked( m, menuitem_clicked_callback, L );
-		else
-			uiMenuItemOnClicked( m, NULL, NULL );
-	}
-	return 0;
-}
+DECLARE_ACTION( uiMenuItem, Enable )
+DECLARE_ACTION( uiMenuItem, Disable )
+DECLARE_GETTER( uiMenuItem, Checked, boolean )
+DECLARE_SETTER( uiMenuItem, SetChecked, boolean )
+DECLARE_CALLBACK_2( uiMenuItem, OnClicked )
 
 static luaL_Reg menuitem_functions[] =
 {
-	{ "Enable", menuitem_enable },
-	{ "Disable", menuitem_disable },
-	{ "Checked", menuitem_checked },
-	{ "SetChecked", menuitem_setchecked },
-	{ "OnClicked", menuitem_onclicked },
+	{ "Enable", l_uiMenuItemEnable },
+	{ "Disable", l_uiMenuItemDisable },
+	{ "Checked", l_uiMenuItemChecked },
+	{ "SetChecked", l_uiMenuItemSetChecked },
+	{ "OnClicked", l_uiMenuItemOnClicked },
 	{ 0, 0 }
 };
 
-int menu_append( lua_State* L )
+
+int l_uiMenuAppendItem( lua_State* L )
 {
-	uiMenu* m = (uiMenu*) check_control( L, 1, control_menu );
+	uiMenu* m = (uiMenu*) check_control( L, 1, control_uiMenu );
 	if( m )
 	{
 		uiMenuItem* i = uiMenuAppendItem( m, luaL_checkstring( L, 2 ) );
-		control_create( L, (uiControl*) i, control_menuitem, menuitem_functions );
+		control_create( L, (uiControl*) i, control_uiMenuItem, menuitem_functions );
 		return 1;
 	}
 	return 0;
 }
 
-int menu_appendcheckitem( lua_State* L )
+int l_uiMenuAppendCheckItem( lua_State* L )
 {
-	uiMenu* m = (uiMenu*) check_control( L, 1, control_menu );
+	uiMenu* m = (uiMenu*) check_control( L, 1, control_uiMenu );
 	if( m )
 	{
 		uiMenuItem* i = uiMenuAppendCheckItem( m, luaL_checkstring( L, 2 ) );
-		control_create( L, (uiControl*) i, control_menuitem, menuitem_functions );
+		control_create( L, (uiControl*) i, control_uiMenuItem, menuitem_functions );
 		return 1;
 	}
 	return 0;
 }
 
-int menu_appendquititem( lua_State* L )
+int l_uiMenuAppendQuitItem( lua_State* L )
 {
-	uiMenu* m = (uiMenu*) check_control( L, 1, control_menu );
+	uiMenu* m = (uiMenu*) check_control( L, 1, control_uiMenu );
 	if( m )
 	{
 		uiMenuItem* i = uiMenuAppendQuitItem( m );
-		control_create( L, (uiControl*) i, control_menuitem, menuitem_functions );
+		control_create( L, (uiControl*) i, control_uiMenuItem, menuitem_functions );
 		return 1;
 	}
 	return 0;
 }
 
-int menu_appendpreferencesitem( lua_State* L )
+int l_uiMenuAppendPreferencesItem( lua_State* L )
 {
-	uiMenu* m = (uiMenu*) check_control( L, 1, control_menu );
+	uiMenu* m = (uiMenu*) check_control( L, 1, control_uiMenu );
 	if( m )
 	{
 		uiMenuItem* i = uiMenuAppendPreferencesItem( m );
-		control_create( L, (uiControl*) i, control_menuitem, menuitem_functions );
+		control_create( L, (uiControl*) i, control_uiMenuItem, menuitem_functions );
 		return 1;
 	}
 	return 0;
 }
 
-int menu_appendaboutitem( lua_State* L )
+int l_uiMenuAppendAboutItem( lua_State* L )
 {
-	uiMenu* m = (uiMenu*) check_control( L, 1, control_menu );
+	uiMenu* m = (uiMenu*) check_control( L, 1, control_uiMenu );
 	if( m )
 	{
 		uiMenuItem* i = uiMenuAppendAboutItem( m );
-		control_create( L, (uiControl*) i, control_menuitem, menuitem_functions );
+		control_create( L, (uiControl*) i, control_uiMenuItem, menuitem_functions );
 		return 1;
 	}
 	return 0;
 }
 
-int menu_appendseparator( lua_State* L )
-{
-	uiMenu* m = (uiMenu*) check_control( L, 1, control_menu );
-	if( m )
-	{
-		uiMenuAppendSeparator( m );
-	}
-	return 0;
-}
+DECLARE_ACTION( uiMenu, AppendSeparator )
 
 static luaL_Reg menu_functions[] =
 {
-	{ "AppendItem", menu_append },
-	{ "AppendCheckItem", menu_appendcheckitem },
-	{ "AppendQuitItem", menu_appendquititem },
-	{ "AppendPreferencesItem", menu_appendpreferencesitem },
-	{ "AppendAboutItem", menu_appendaboutitem },
+	{ "AppendItem", l_uiMenuAppendItem },
+	{ "AppendCheckItem", l_uiMenuAppendCheckItem },
+	{ "AppendQuitItem", l_uiMenuAppendQuitItem },
+	{ "AppendPreferencesItem", l_uiMenuAppendPreferencesItem },
+	{ "AppendAboutItem", l_uiMenuAppendAboutItem },
+	{ "AppendSeparator", l_uiMenuAppendSeparator },
 	{ 0, 0 }
 };
 
 static int new_menu( lua_State* L )
 {
 	uiControl* c = (uiControl*) uiNewMenu( luaL_optlstring( L, 1, "Menu", NULL ) );
-	printf( "new menu\n" );
-	
-	control_create( L, c, control_menu, menu_functions );
+	control_create( L, c, control_uiMenu, menu_functions );
 	return 1;
 }
 
@@ -1475,7 +906,7 @@ static int new_area( lua_State* L )
 		a = uiNewArea( ah );
 	}
 
-	control_create( L, (uiControl*) a, control_label, area_functions );
+	control_create( L, (uiControl*) a, control_uiArea, area_functions );
 	return 1;
 }
 
@@ -1486,7 +917,7 @@ static luaL_Reg fontbutton_functions[] =
 
 static int new_fontbutton( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewFontButton(), control_fontbutton, fontbutton_functions );
+	control_create( L, (uiControl*) uiNewFontButton(), control_uiFontButton, fontbutton_functions );
 	return 1;
 }
 
@@ -1497,14 +928,14 @@ static luaL_Reg colorbutton_functions[] =
 
 static int new_colorbutton( lua_State* L )
 {
-	control_create( L, (uiControl*) uiNewColorButton(), control_colorbutton, colorbutton_functions );
+	control_create( L, (uiControl*) uiNewColorButton(), control_uiColorButton, colorbutton_functions );
 	return 1;
 }
 
 
 static int openfile( lua_State* L )
 {
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
+	uiWindow* w = (uiWindow*) check_control( L, 1, control_uiWindow );
 	if( w )
 	{
 		char* f = uiOpenFile( w );
@@ -1520,7 +951,7 @@ static int openfile( lua_State* L )
 
 static int savefile( lua_State* L )
 {
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
+	uiWindow* w = (uiWindow*) check_control( L, 1, control_uiWindow );
 	if( w )
 	{
 		char* f = uiSaveFile( w );
@@ -1536,7 +967,7 @@ static int savefile( lua_State* L )
 
 static int msgbox( lua_State* L )
 {
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
+	uiWindow* w = (uiWindow*) check_control( L, 1, control_uiWindow );
 	if( w )
 	{
 		uiMsgBox( w, luaL_checkstring( L, 2 ), luaL_checkstring( L, 3 ) );
@@ -1546,7 +977,7 @@ static int msgbox( lua_State* L )
 
 static int msgboxerror( lua_State* L )
 {
-	uiWindow* w = (uiWindow*) check_control( L, 1, control_window );
+	uiWindow* w = (uiWindow*) check_control( L, 1, control_uiWindow );
 	if( w )
 	{
 		uiMsgBoxError( w, luaL_checkstring( L, 2 ), luaL_checkstring( L, 3 ) );
