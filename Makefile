@@ -17,6 +17,7 @@ else
     LDFLAGS += -L../libui/out -rpath=../libui/out -lui
 endif
 
+SRC = libui-lua.c callback.c control-common.c controls.c menu.c object.c
 OBJ = $(SRC:%.c=%.o)
 
 
