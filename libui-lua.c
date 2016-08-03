@@ -3,6 +3,9 @@
 
 // simplifies getters/setters
 #define luaL_checkboolean( L, i ) lua_toboolean( L, i )
+typedef int integer;
+typedef int boolean;
+typedef double number;
 
 #include <ui.h>
 
@@ -48,6 +51,8 @@ enum
 	callback_OnToggled = 0xDA3,
 	callback_OnChanged = 0xDA4,
 	callback_OnSelected = 0xDA5,
+        callback_OnPositionChanged = 0xDA6,
+        callback_OnContentSizeChanged = 0xDA7,
 };
 
 
@@ -140,9 +145,26 @@ static int invoke_callback( lua_State* L, void* id, int callback, int args )
         return 1; \
     }
 
+#define DECLARE_SETTER_2( typename, action, typea, typeb ) \
+    int l_ ## typename ## action( lua_State* L ) { \
+        typename ## action( (typename*) check_object( L, 1, typename ## Signature ), luaL_check ## typea ( L, 2 ), luaL_check ## typeb ( L, 3 ) ); \
+        lua_pushvalue( L, 1 ); \
+        return 1; \
+    }
+    
 #define DECLARE_GETTER( typename, action, type ) \
     int l_ ## typename ## action( lua_State* L ) { \
         lua_push ## type ( L, typename ## action ( (typename*) check_object( L, 1, typename ## Signature ) ) ); \
+        return 1; \
+    }
+
+#define DECLARE_GETTER_2( typename, action, typea, typeb ) \
+    int l_ ## typename ## action( lua_State* L ) { \
+        typea a; \
+        typeb b; \
+        typename ## action ( (typename*) check_object( L, 1, typename ## Signature ), &a, &b ); \
+        lua_push ## typea ( L, a ); \
+        lua_push ## typeb ( L, b ); \
         return 1; \
     }
 
@@ -449,9 +471,20 @@ int l_uiWindowTitle( lua_State* L )
 }
 //DECLARE_GETTER( uiWindow, Title, string )
 DECLARE_SETTER( uiWindow, SetTitle, string )
+DECLARE_GETTER_2( uiWindow, Position, integer, integer )
+DECLARE_SETTER_2( uiWindow, SetPosition, integer, integer )
+DECLARE_ACTION( uiWindow, Center )
+DECLARE_GETTER_2( uiWindow, ContentSize, integer, integer )
+DECLARE_SETTER_2( uiWindow, SetContentSize, integer, integer )
+DECLARE_GETTER( uiWindow, Fullscreen, boolean )
+DECLARE_SETTER( uiWindow, SetFullscreen, boolean )
+DECLARE_GETTER( uiWindow, Borderless, boolean )
+DECLARE_SETTER( uiWindow, SetBorderless, boolean )
 DECLARE_GETTER( uiWindow, Margined, boolean)
 DECLARE_SETTER( uiWindow, SetMargined, boolean )
 DECLARE_CALLBACK_REGISTER( uiWindow, uiWindowSignature, OnClosing )
+DECLARE_CALLBACK( uiWindow, OnPositionChanged )
+DECLARE_CALLBACK( uiWindow, OnContentSizeChanged )
 
 static int window_setchild( lua_State* L )
 {
@@ -467,6 +500,17 @@ static luaL_Reg window_functions[] =
 {
 	{ "Title", l_uiWindowTitle },
 	{ "SetTitle", l_uiWindowSetTitle },
+        { "Position", l_uiWindowPosition },
+        { "SetPosition", l_uiWindowPosition },
+        { "Center", l_uiWindowCenter },
+        { "OnPositionChanged", l_uiWindowOnPositionChanged },
+        { "ContentSize", l_uiWindowContentSize },
+        { "SetContentSize", l_uiWindowSetContentSize },
+        { "OnContentSizeChanged", l_uiWindowOnContentSizeChanged },
+        { "Fullscreen", l_uiWindowFullscreen },
+        { "SetFullscreen", l_uiWindowSetFullscreen },
+        { "Borderless", l_uiWindowBorderless },
+        { "SetBorderless", l_uiWindowSetBorderless },
 	{ "Margined", l_uiWindowMargined },
 	{ "SetMargined", l_uiWindowSetMargined },
 	{ "SetChild", window_setchild },
@@ -510,7 +554,7 @@ static int new_button( lua_State* L )
 }
 
 
-static int box_append( lua_State* L )
+static int l_uiBoxAppend( lua_State* L )
 {
 	uiBox* b = (uiBox*) check_object( L, 1, uiBoxSignature );
 	uiControl* o = (uiControl*) check_object( L, 2, uiControlSignature );
@@ -525,7 +569,7 @@ DECLARE_SETTER( uiBox, Delete, integer )
 
 luaL_Reg box_functions[] =
 {
-	{ "Append", box_append },
+	{ "Append", l_uiBoxAppend },
 	{ "Delete", l_uiBoxDelete },
 	{ "Padded", l_uiBoxPadded },
 	{ "SetPadded", l_uiBoxSetPadded },
@@ -626,6 +670,18 @@ luaL_Reg entry_functions[] =
 static int new_entry( lua_State* L )
 {
 	object_create( L, uiNewEntry(), uiEntrySignature, control_common, entry_functions, 0 );
+	return 1;
+}
+
+static int new_password_entry( lua_State* L )
+{
+    object_create( L, uiNewPasswordEntry(), uiEntrySignature, control_common, entry_functions, 0 );
+    return 1;
+}
+
+static int new_search_entry( lua_State* L )
+{
+	object_create( L, uiNewSearchEntry(), uiEntrySignature, control_common, entry_functions, 0 );
 	return 1;
 }
 
@@ -777,10 +833,12 @@ static int new_spinbox( lua_State* L )
 }
 
 
+DECLARE_GETTER( uiProgressBar, Value, integer )
 DECLARE_SETTER( uiProgressBar, SetValue, integer )
 
 static luaL_Reg progress_functions[] =
 {
+	{ "Value", l_uiProgressBarValue },
 	{ "SetValue", l_uiProgressBarSetValue },
 	{ 0, 0 }
 };
@@ -828,6 +886,12 @@ static int new_hseparator( lua_State* L )
 	return 1;
 }
 
+static int new_vseparator( lua_State* L )
+{
+	object_create( L, uiNewVerticalSeparator(), uiSeparatorSignature, control_common, 0 );
+	return 1;
+}
+
 static void callback_uiComboboxOnSelected( uiCombobox* c, void* d )
 {
     lua_State* L = (lua_State*) d;
@@ -854,23 +918,62 @@ static luaL_Reg combobox_functions[] =
 
 static int new_combobox( lua_State* L )
 {
-	if( lua_toboolean( L, 1 ) == 1 )
+	object_create( L, uiNewCombobox(), uiComboboxSignature, control_common, combobox_functions, 0 );
+	return 1;
+}
+
+
+static void callback_uiEditableComboboxOnChanged( uiEditableCombobox* c, void* d )
+{
+	lua_State* L = (lua_State*) d;
+	if( L )
 	{
-		object_create( L, uiNewEditableCombobox(), uiComboboxSignature, control_common, combobox_functions, 0 );
+		char* text = uiEditableComboboxText( c );
+		lua_pushstring( L, text );
+		invoke_callback( L, c, callback_OnChanged, 1 );
+		uiFreeText( text );
 	}
-	else
-	{
-		object_create( L, uiNewCombobox(), uiComboboxSignature, control_common, combobox_functions, 0 );
-	}
+}
+
+static int l_uiEditableComboboxText( lua_State* L )
+{
+	char* s = uiEditableComboboxText( (uiEditableCombobox*) check_object( L, 1, uiEditableComboboxSignature ) );
+	lua_pushstring( L, s );
+	uiFreeText( s );
+	return 1;
+}
+
+DECLARE_SETTER( uiEditableCombobox, SetText, string )
+DECLARE_SETTER( uiEditableCombobox, Append, string )
+DECLARE_CALLBACK_REGISTER( uiEditableCombobox, uiEditableComboboxSignature, OnChanged )
+
+static luaL_Reg editable_combobox_functions[] =
+{
+	{ "Text", l_uiEditableComboboxText },
+	{ "SetText", l_uiEditableComboboxSetText },
+	{ "Append", l_uiEditableComboboxAppend },
+	{ "OnChanged", l_uiEditableComboboxOnChanged },
+	{ 0, 0 }
+};
+
+static int new_editablecombobox( lua_State* L )
+{
+	object_create( L, uiNewEditableCombobox(), uiEditableComboboxSignature, control_common, editable_combobox_functions, 0 );
 	return 1;
 }
 
 
 DECLARE_SETTER( uiRadioButtons, Append, string )
+DECLARE_GETTER( uiRadioButtons, Selected, boolean )
+DECLARE_SETTER( uiRadioButtons, SetSelected, boolean )
+DECLARE_CALLBACK( uiRadioButtons, OnSelected )
 
 static luaL_Reg radiobuttons_functions[] =
 {
 	{ "Append", l_uiRadioButtonsAppend },
+	{ "Selected", l_uiRadioButtonsSelected },
+	{ "SetSelected", l_uiRadioButtonsSetSelected },
+	{ "OnSelected", l_uiRadioButtonsOnSelected },
 	{ 0, 0 }
 };
 
@@ -946,6 +1049,12 @@ static luaL_Reg multilineentry_functions[] =
 static int new_multilineentry( lua_State* L )
 {
 	object_create( L, uiNewMultilineEntry(), uiMultilineEntrySignature, control_common, multilineentry_functions, 0 );
+	return 1;
+}
+
+static int new_nonwrapping_multilineentry( lua_State* L )
+{
+	object_create( L, uiNewNonWrappingMultilineEntry(), uiMultilineEntrySignature, control_common, multilineentry_functions, 0 );
 	return 1;
 }
 
@@ -1183,6 +1292,8 @@ luaL_Reg ui_functions[] =
 	{ "NewHBox", new_hbox },
 	{ "NewVBox", new_vbox },
 	{ "NewEntry", new_entry },
+	{ "NewPasswordEntry", new_password_entry },
+	{ "NewSearchEntry", new_search_entry },
 	{ "NewCheckbox", new_checkbox },
 	{ "NewLabel", new_label },
 	{ "NewTab", new_tab },
@@ -1191,12 +1302,15 @@ luaL_Reg ui_functions[] =
 	{ "NewProgressBar", new_progress },
 	{ "NewSlider", new_slider },
 	{ "NewHSeparator", new_hseparator },
+	{ "NewVSeparator", new_vseparator },
 	{ "NewCombobox", new_combobox },
+	{ "NewEditableCombobox", new_editablecombobox },
 	{ "NewRadioButtons", new_radiobuttons },
 	{ "NewDateTimePicker", new_datetimepicker },
 	{ "NewTimePicker", new_timepicker },
 	{ "NewDatePicker", new_datepicker },
 	{ "NewMultilineEntry", new_multilineentry },
+	{ "NewNonWrappingMultilineEntry", new_nonwrapping_multilineentry },
 	{ "NewMenu", new_menu },
 	{ "NewArea", new_area },
 	{ "NewFontButton", new_fontbutton },
@@ -1227,7 +1341,7 @@ MODULE_API int luaopen_libui_core( lua_State* L )
 
 	luaL_newlib( L, ui_functions );
 
-	open_platform_specific( L );
+//	open_platform_specific( L );
 
 	return 1;
 }
