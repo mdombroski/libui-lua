@@ -23,7 +23,7 @@ typedef double number;
 // TODO figure out how to free text in generic getters
 
 
-void object_create( lua_State* L, void* object, int signature, ... );
+void* object_create( lua_State* L, void* object, int signature, ... );
 int object_copy( lua_State* L, void* object );
 void* check_object( lua_State* L, int idx, int signature );
 int object_gc( lua_State* L );

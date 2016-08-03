@@ -158,5 +158,23 @@ MODULE_API int luaopen_libui_core( lua_State* L )
 	luaL_setfuncs( L, controls_functions, 0 );
 	luaL_setfuncs( L, menu_functions, 0 );
 
+	// these are the alignment/positioning enums for uiGrid
+	lua_pushinteger( L, uiAlignFill );
+	lua_setfield( L, -2, "AlignFill" );
+	lua_pushinteger( L, uiAlignStart );
+	lua_setfield( L, -2, "AlignStart" );
+	lua_pushinteger( L, uiAlignCenter );
+	lua_setfield( L, -2, "AlignCenter" );
+	lua_pushinteger( L, uiAlignEnd );
+	lua_setfield( L, -2, "AlignEnd" );
+	lua_pushinteger( L, uiAtLeading );
+	lua_setfield( L, -2, "AtLeading" );
+	lua_pushinteger( L, uiAtTop );
+	lua_setfield( L, -2, "AtTop" );
+	lua_pushinteger( L, uiAtTrailing );
+	lua_setfield( L, -2, "AtTrailing" );
+	lua_pushinteger( L, uiAtBottom );
+	lua_setfield( L, -2, "AtBottom" );
+
 	return 1;
 }

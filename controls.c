@@ -133,13 +133,23 @@ static luaL_Reg box_functions[] =
 
 static int new_hbox( lua_State* L )
 {
-	object_create( L, uiNewHorizontalBox(), uiBoxSignature, control_common, box_functions, 0 );
+	uiBox* b = uiNewHorizontalBox();
+	object_create( L, b, uiBoxSignature, control_common, box_functions, 0 );
+	if( luaL_checkboolean( L, 1 ) )
+	{
+		uiBoxSetPadded( b, lua_toboolean( L, 1 ) );
+	}
 	return 1;
 }
 
 static int new_vbox( lua_State* L )
 {
-	object_create( L, uiNewVerticalBox(), uiBoxSignature, control_common, box_functions, 0 );
+	uiBox* b = uiNewVerticalBox();
+	object_create( L, b, uiBoxSignature, control_common, box_functions, 0 );
+	if( luaL_checkboolean( L, 1 ) )
+	{
+		uiBoxSetPadded( b, lua_toboolean( L, 1 ) );
+	}
 	return 1;
 }
 
@@ -272,6 +282,10 @@ static int tab_append( lua_State* L )
 	uiTab* t = (uiTab*) check_object( L, 1, uiTabSignature );
 	uiControl* c = check_object( L, 3, uiControlSignature );
 	uiTabAppend( t, luaL_checkstring( L, 2 ), c );
+	if( luaL_checkboolean( L, 4 ) )
+	{
+		uiTabSetMargined( t, uiTabNumPages( t ) - 1, lua_toboolean( L, 4 ) );
+	}
 	lua_pushvalue( L, 1 );
 	return 1;
 }
@@ -402,7 +416,12 @@ static luaL_Reg progress_functions[] =
 
 static int new_progress( lua_State* L )
 {
-	object_create( L, uiNewProgressBar(), uiProgressBarSignature, control_common, progress_functions, 0 );
+	uiProgressBar* p = uiNewProgressBar();
+	object_create( L, p, uiProgressBarSignature, control_common, progress_functions, 0 );
+	if( luaL_checkinteger( L, 1 ) )
+	{
+		uiProgressBarSetValue( p, lua_tointeger( L, 1 ) );
+	}
 	return 1;
 }
 
@@ -684,6 +703,89 @@ static int new_colorbutton( lua_State* L )
 	return 1;
 }
 
+
+int l_uiFormAppend( lua_State* L )
+{
+	uiFormAppend( 
+		(uiForm*) check_object( L, 1, uiFormSignature ),
+		luaL_checkstring( L, 2 ),
+		check_object( L, 3, uiControlSignature ),
+		lua_toboolean( L, 4 ) );
+	lua_pushvalue( L, 1 );
+	return 1;
+}
+
+DECLARE_GETTER( uiForm, Padded, boolean )
+DECLARE_SETTER( uiForm, SetPadded, boolean )
+DECLARE_SETTER( uiForm, Delete, integer )
+
+static luaL_Reg form_functions[] =
+{
+	{ "Append", l_uiFormAppend },
+	{ "Delete", l_uiFormDelete },
+	{ "Padded", l_uiFormPadded },
+	{ "SetPadded", l_uiFormSetPadded },
+	{ 0, 0 }
+};
+
+static int new_form( lua_State* L )
+{
+	uiForm* f = uiNewForm();
+	object_create( L, f, uiFormSignature, control_common, form_functions, 0 );
+	if( luaL_checkboolean( L, 1 ) )
+	{
+		uiFormSetPadded( f, lua_toboolean( L, 1 ) );
+	}
+	return 1;
+}
+
+
+int l_uiGridAppend( lua_State* L )
+{
+	uiGrid* g = (uiGrid*) check_object( L, 1, uiGridSignature );
+	uiControl* c = check_object( L, 2, uiControlSignature );
+	int left = luaL_checkinteger( L, 3 );
+	int top = luaL_checkinteger( L, 4 );
+	int xspan = luaL_optinteger( L, 5, 1 );
+	int yspan = luaL_optinteger( L, 6, 1 );
+	int hexpand = luaL_optinteger( L, 7, 1 );
+	uiAlign halign = luaL_optinteger( L, 8, uiAlignFill );
+	int vexpand = luaL_optinteger( L, 9, 1 );
+	uiAlign valign = luaL_optinteger( L, 10, uiAlignFill );
+	uiGridAppend( g, c, left, top, xspan, yspan, hexpand, halign, vexpand, valign );
+	lua_pushvalue( L, 1 );
+	return 1;
+}
+
+int l_uiGridInsertAt( lua_State* L )
+{
+	return 1;
+}
+
+DECLARE_GETTER( uiGrid, Padded, boolean )
+DECLARE_SETTER( uiGrid, SetPadded, boolean )
+
+static luaL_Reg grid_functions[] =
+{
+	{ "Append", l_uiGridAppend },
+	{ "InsertAt", l_uiGridInsertAt },
+	{ "Padded", l_uiGridPadded },
+	{ "SetPadded", l_uiGridSetPadded },
+	{ 0, 0 }
+};
+
+static int new_grid( lua_State* L )
+{
+	uiGrid* g = uiNewGrid();
+	object_create( L, g, uiGridSignature, control_common, grid_functions, 0 );
+	if( luaL_checkboolean( L, 1 ) )
+	{
+		uiGridSetPadded( g, lua_toboolean( L, 1 ) );
+	}
+
+	return 1;
+}
+
 luaL_Reg controls_functions[] =
 {
 	{ "NewWindow", new_window },
@@ -713,6 +815,8 @@ luaL_Reg controls_functions[] =
 	{ "NewFontButton", new_fontbutton },
 	{ "NewColorButton", new_colorbutton },
 	{ "NewColourButton", new_colorbutton },
+	{ "NewForm", new_form },
+	{ "NewGrid", new_grid },
 	{ 0, 0 }
 };
 

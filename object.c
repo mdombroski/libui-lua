@@ -44,7 +44,7 @@ int object_gc( lua_State* L )
 }
 
 // NOTE: when calling object_create, the last argument MUST be 0 (just add it on the end)
-void object_create( lua_State* L, void* object, int signature, ... )
+void* object_create( lua_State* L, void* object, int signature, ... )
 {
     // userdata wrapper is a single pointer
     void** p = lua_newuserdata( L, sizeof(object) );
@@ -87,6 +87,8 @@ void object_create( lua_State* L, void* object, int signature, ... )
     lua_settable( L, LUA_REGISTRYINDEX );
 
 	lua_setmetatable( L, -2 );
+	
+	return object;
 }
 
 int object_copy( lua_State* L, void* object )
