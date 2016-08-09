@@ -35,6 +35,56 @@ static int l_uiQuit( lua_State* L )
 	return 0;
 }
 
+typedef struct timeout_data
+{
+	lua_State* L;
+} timeout_data;
+
+static int invoke_timeout( void* data )
+{
+	timeout_data *td = (timeout_data *) data;
+	lua_State* L = td->L;
+
+	lua_pushlightuserdata( L, td );
+	lua_gettable( L, LUA_REGISTRYINDEX );
+
+	if (lua_isfunction( L, -1 ) )
+	{
+		lua_call( L, 0, 1 );
+
+		int status = lua_toboolean( L, -1 );
+		lua_pop( L, 1 );
+		if (status)
+			return 1;
+	}
+
+	// delete timeout data
+	lua_pushnil( L );
+	lua_settable( L, LUA_REGISTRYINDEX );
+	free( td );
+
+	// do not reschedule
+	return 0;
+}
+
+static int l_uiTimeout( lua_State* L )
+{
+	int timeout = luaL_checkinteger( L, 1 );
+	luaL_checktype( L, 2, LUA_TFUNCTION );
+
+	timeout_data *data = (timeout_data *) malloc( sizeof(timeout_data) );
+	data->L = L;
+
+	// REGISTRY[lightuserdata] = function
+	lua_pushlightuserdata( L, data );
+	lua_pushvalue( L, 2 );
+	lua_settable( L, LUA_REGISTRYINDEX );
+
+	uiTimeout( timeout, invoke_timeout, data );
+
+	return 0;
+}
+
 static int l_uiQueueMain( lua_State* L )
 {
 	printf( "STUB uiQueueMain\n" );
@@ -128,6 +178,7 @@ luaL_Reg ui_functions[] =
 {
 	{ "Main", l_uiMain },
 	{ "Quit", l_uiQuit },
+	{ "Timeout", l_uiTimeout },
 	{ "QueueMain", l_uiQueueMain },
 	{ "ShouldQuit", l_uiOnShouldQuit },
 
