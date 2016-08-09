@@ -5,10 +5,10 @@
 
 #include "object.h"
 #include "callback.h"
-#include "queue.h"
 #include "control-common.h"
 #include "menu.h"
 #include "controls.h"
+#include "image.h"
 
 #ifndef MODULE_API
 #define MODULE_API __attribute__((visibility("default")))
@@ -155,6 +155,7 @@ MODULE_API int luaopen_libui_core( lua_State* L )
 	}
 
 	luaL_newlib( L, ui_functions );
+	luaL_setfuncs( L, image_functions, 0 );
 	luaL_setfuncs( L, controls_functions, 0 );
 	luaL_setfuncs( L, menu_functions, 0 );
 

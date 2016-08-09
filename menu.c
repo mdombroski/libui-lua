@@ -4,6 +4,10 @@
 
 #include <ui.h>
 
+// menus and items are not controls and do not have control signatures
+#define uiMenuSignature 0x54665434
+#define uiMenuItemSignature 0x295629A5
+
 
 static void callback_uiMenuItemOnClicked( uiMenuItem* i, uiWindow* w, void* d )
 {

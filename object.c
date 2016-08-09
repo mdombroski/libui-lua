@@ -32,11 +32,11 @@ int object_gc( lua_State* L )
         luaL_error( L, "libui not an object" );
         return 0;
     }
-    if( object_signature == uiMenuSignature || object_signature == uiMenuItemSignature )
-    {
+//    if( object_signature == uiMenuSignature || object_signature == uiMenuItemSignature )
+//    {
         // can't delete anything from menus
-        return 0;
-    }
+//        return 0;
+//    }
 
     // TODO maybe one day when libui gets an OnDestroy callback this can be implemented fully.
 
@@ -125,9 +125,10 @@ int object_copy( lua_State* L, void* object )
     return 1;
 }
 
-void* check_object( lua_State* L, int idx, int signature )
+
+void* get_object( lua_State* L, int idx, int* signature )
 {
-    if( lua_type( L, idx ) != LUA_TUSERDATA )
+	if( lua_type( L, idx ) != LUA_TUSERDATA )
     {
         luaL_error( L, "libui not a userdata" );
         return 0;
@@ -168,19 +169,92 @@ void* check_object( lua_State* L, int idx, int signature )
     }
     lua_pop( L, 1 );
 
-	// match explicit signature
-    if( object_signature == signature )
-    {
-        return o;
-    }
+	if( signature )
+	{
+		*signature = object_signature;
+	}
 
-    // uiMenu and uiMenuItem objects are not uiControl objects
-    if( uiControlSignature == signature && ( uiMenuSignature != signature && uiMenuItemSignature != signature ) )
-    {
-        return o;
-    }
+	return o;
+}
 
-    luaL_error( L, "libui object signature mismatch" );
+void* check_object( lua_State* L, int idx, int signature )
+{
+	int s = 0;
+    void* o = get_object( L, idx, &s );
+	
+	if( s && s == signature )
+	{
+		return o;
+	}
+
 	return 0;
 }
 
+
+int is_object( lua_State* L, int idx, int signature )
+{
+	if( lua_type( L, idx ) != LUA_TUSERDATA )
+    {
+		// Not a userdata
+        return 0;
+    }
+
+    int object_signature = 0;
+
+    // fetch object signature from its metatable data
+    lua_getmetatable( L, idx );
+	int e = lua_istable( L, -1 );
+    if( e )
+    {
+        lua_pushstring( L, "__libui_signature" );
+        lua_gettable( L, -2 );
+		e = lua_isinteger( L, -1 );
+        if( e )
+        {
+            object_signature = lua_tointeger( L, -1 );
+        }
+        lua_pop( L, 1 );
+		
+		if( !e )
+		{
+			// libui object signature not found in meta table
+			return 0;
+		}
+    }
+    lua_pop( L, 1 );
+
+	if( !e )
+	{
+		// no metatable present
+		return 0;
+	}
+
+    void** p = lua_touserdata( L, idx );
+    if( p == NULL || *p == NULL )
+    {
+        // pointer invalid
+        return 0;
+	}
+
+	void* o = *p;
+
+	// check object is valid in registry
+	lua_pushlightuserdata( L, o );
+	lua_gettable( L, LUA_REGISTRYINDEX );
+	e = lua_isnil( L, -1 );
+	lua_pop( L, 1 );
+
+	if( e )
+    {
+        // libui object is not valid in registry (it might have been deleted)
+        return 0;
+    }
+
+	if( signature == 0 || signature == object_signature )
+	{
+		return 1;
+	}
+
+	// signature mismatch
+	return 0;
+}
