@@ -7,6 +7,9 @@
 #define uiImageSignature 0x45363456
 
 
+static luaL_Reg image_members[];
+
+
 int is_image( lua_State* L, int index )
 {
 	return is_object( L, index, uiImageSignature );
@@ -53,8 +56,8 @@ static int l_Size( lua_State* L )
 static int l_Resize( lua_State* L )
 {
 	uiImage *i = (uiImage*) check_object( L, 1, uiImageSignature );
-	uiImageResize( i, luaL_checkinteger( L, 2 ), luaL_checkinteger( L, 3 ) );
-	lua_pushvalue( L, 1 );
+	uiImage *n = uiImageResize( i, luaL_checkinteger( L, 2 ), luaL_checkinteger( L, 3 ) );
+	object_create( L, n, uiImageSignature, image_members, 0 );
 	return 1;
 }
 
