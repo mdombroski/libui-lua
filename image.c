@@ -22,14 +22,15 @@ uiImage* check_image( lua_State* L, int index )
 static int l_Load( lua_State* L )
 {
 	uiImage* i = (uiImage*) check_object( L, 1, uiImageSignature );
-	
+
 	if( uiImageLoad( i, luaL_checkstring( L, 2 ) ) )
 	{
 		lua_pushvalue( L, 1 );
 		return 1;
 	}
-	
+
 	luaL_error( L, "libui: image could not be loaded." );
+	return 0;
 }
 
 static int l_Valid( lua_State* L )
