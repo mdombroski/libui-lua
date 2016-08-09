@@ -41,11 +41,12 @@ menu:AppendAboutItem()
                         :Append( ui.NewHBox(), true )
                         :Append( ui.NewButton( "Close" ):OnClicked( function() w:Destroy() end ), true )
                         :Append( ui.NewHBox(), true ) )
-            ):Show()
+            ):Show():Center()
         end )
 
 
-local window = ui.NewWindow( "libui Control Gallery", 640, 480, true )
+local window = ui.NewWindow( "Control Gallery", 640, 480, true )
+	:SetIcon( ui.NewImage( "examples/text-x-lua.svg" ) )
     :SetMargined( true )
 window:OnClosing( function()
         window:Destroy()
@@ -56,7 +57,7 @@ window:OnClosing( function()
 -- Basic controls category
 
 local basic = ui.NewVBox( true )
-basic:Append( ui.NewHBox( true ):Append( ui.NewButton( "Button" ) ):Append( ui.NewCheckbox( "Checkbox" ) ) )
+basic:Append( ui.NewHBox( true ):Append( ui.NewButton( "Button" ) ):Append( ui.NewCheckbox( "Checkbox" ) ):Append( ui.NewImageBox( ui.NewImage( "examples/text-x-lua.png" ):Resize( 32, 32 ) ) ) )
 basic:Append( ui.NewLabel( "This is a label. Right now, labels can only span one line." ) )
 basic:Append( ui.NewHSeparator() )
 basic:Append( ui.NewGroup( "Entries" ):SetMargined( true ):SetChild( ui.NewForm():SetPadded( true )
