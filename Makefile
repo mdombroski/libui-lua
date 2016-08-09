@@ -7,8 +7,8 @@ SRC = libui-lua.c
 
 ifeq ($(OS),Windows_NT)
     TARGET = libui/core.dll
-    CFLAGS += -Ic:/src/lua/stage/include -I../ -I../libui/ -DMODULE_API=__declspec\(dllexport\)
-    LDFLAGS += -Lc:/src/lua/stage/lib -llua53 -L../out -lui
+    CFLAGS += -I../lua-5.3.3/src -I../libui/ -DMODULE_API=__declspec\(dllexport\)
+    LDFLAGS += -L../lua-5.3.3/src -llua53 ../libui/out/libui.lib
     SRC += libui-windows-lua.c
 else
     CFLAGS += -I../libui/ -Wall -fvisibility=hidden -DMODULE_API=__attribute__\(\(visibility\(\"default\"\)\)\)
@@ -17,7 +17,7 @@ else
     LDFLAGS += -L../libui/out -rpath=../libui/out -lui
 endif
 
-SRC = libui-lua.c callback.c control-common.c controls.c menu.c object.c
+SRC = libui-lua.c callback.c control-common.c controls.c menu.c object.c image.c
 OBJ = $(SRC:%.c=%.o)
 
 

@@ -10,22 +10,14 @@ typedef int integer;
 typedef int boolean;
 typedef double number;
 
-// match against window controls (not menus)
-#define uiControlSignature 0x5A5A5A5A
-
-// menus and items are not controls
-#define uiMenuSignature 0x54665434
-#define uiMenuItemSignature 0x295629A5
-
-// private header?
-#include <common/controlsigs.h>
-
 // TODO figure out how to free text in generic getters
 
 
 void* object_create( lua_State* L, void* object, int signature, ... );
 int object_copy( lua_State* L, void* object );
+void* get_object( lua_State* L, int idx, int* signature );
 void* check_object( lua_State* L, int idx, int signature );
+int is_object( lua_State* L, int idx, int signature );
 int object_gc( lua_State* L );
 
 

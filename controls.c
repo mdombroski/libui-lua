@@ -3,11 +3,13 @@
 #include "object.h"
 #include "callback.h"
 #include "control-common.h"
+#include "image.h"
 
 #include <lua.h>
 #include <lauxlib.h>
 
 #include <ui.h>
+
 
 static int callback_uiWindowOnClosing( uiWindow* w, void* d )
 {
@@ -20,6 +22,13 @@ static int l_uiWindowTitle( lua_State* L )
 	char* s = uiWindowTitle( (uiWindow*) check_object( L, 1, uiWindowSignature ) );
 	lua_pushstring( L, s );
 	uiFreeText( s );
+	return 1;
+}
+
+static int l_uiWindowSetIcon( lua_State* L )
+{
+	uiWindowSetIcon( (uiWindow*) check_object( L, 1, uiWindowSignature ), check_image( L, 2 ) );
+	lua_pushvalue( L, 1 );
 	return 1;
 }
 
@@ -43,7 +52,7 @@ DECLARE_CALLBACK( uiWindow, OnContentSizeChanged )
 static int window_setchild( lua_State* L )
 {
 	uiWindow* w = (uiWindow*) check_object( L, 1, uiWindowSignature );
-	uiControl* c = (uiControl*) check_object( L, 2, uiControlSignature );
+	uiControl* c = (uiControl*) check_control( L, 2, 0 );
 	uiWindowSetChild( w, c );
 	lua_pushvalue( L, 1 );
 	return 1;
@@ -54,6 +63,7 @@ static luaL_Reg window_functions[] =
 {
 	{ "Title", l_uiWindowTitle },
 	{ "SetTitle", l_uiWindowSetTitle },
+	{ "SetIcon", l_uiWindowSetIcon },
 	{ "Position", l_uiWindowPosition },
 	{ "SetPosition", l_uiWindowPosition },
 	{ "Center", l_uiWindowCenter },
@@ -88,6 +98,13 @@ static int l_uiButtonText( lua_State* L )
 	return 1;
 }
 
+static int l_uiButtonSetIcon( lua_State* L )
+{
+	uiButtonSetIcon( (uiButton*) check_object( L, 1, uiButtonSignature ), check_image( L, 2 ) );
+	lua_pushvalue( L, 1 );
+	return 1;
+}
+
 //DECLARE_GETTER( uiButton, Text, string )
 DECLARE_SETTER( uiButton, SetText, string )
 DECLARE_CALLBACK( uiButton, OnClicked )
@@ -96,6 +113,7 @@ static luaL_Reg button_functions[] =
 {
 	{ "Text", l_uiButtonText },
 	{ "SetText", l_uiButtonSetText },
+	{ "SetIcon", l_uiButtonSetIcon },
 	{ "OnClicked", l_uiButtonOnClicked },
 	{ 0, 0 }
 };
@@ -112,7 +130,7 @@ static int new_button( lua_State* L )
 static int l_uiBoxAppend( lua_State* L )
 {
 	uiBox* b = (uiBox*) check_object( L, 1, uiBoxSignature );
-	uiControl* o = (uiControl*) check_object( L, 2, uiControlSignature );
+	uiControl* o = (uiControl*) check_control( L, 2, 0 );
 	uiBoxAppend( b, o, lua_toboolean( L, 3 ) );
 	lua_pushvalue( L, 1 );
 	return 1;
@@ -135,7 +153,7 @@ static int new_hbox( lua_State* L )
 {
 	uiBox* b = uiNewHorizontalBox();
 	object_create( L, b, uiBoxSignature, control_common, box_functions, 0 );
-	if( luaL_checkboolean( L, 1 ) )
+	if( lua_isboolean( L, 1 ) )
 	{
 		uiBoxSetPadded( b, lua_toboolean( L, 1 ) );
 	}
@@ -146,7 +164,7 @@ static int new_vbox( lua_State* L )
 {
 	uiBox* b = uiNewVerticalBox();
 	object_create( L, b, uiBoxSignature, control_common, box_functions, 0 );
-	if( luaL_checkboolean( L, 1 ) )
+	if( lua_isboolean( L, 1 ) )
 	{
 		uiBoxSetPadded( b, lua_toboolean( L, 1 ) );
 	}
@@ -276,13 +294,50 @@ static int new_label( lua_State* L )
 	return 1;
 }
 
+static int l_uiImageBoxSetImage( lua_State* L )
+{
+	uiImageBox* i = (uiImageBox*) check_object( L, 1, uiImageBoxSignature );
+	
+	if( lua_isnoneornil( L, 2 ) )
+	{
+		uiImageBoxSetImage( i, 0 );
+	}
+	else
+	{
+		uiImageBoxSetImage( i, check_image( L, 2 ) );
+	}
+
+	lua_pushvalue( L, 1 );
+	return 1;
+}
+
+static luaL_Reg imagebox_functions[] =
+{
+	{ "SetImage", l_uiImageBoxSetImage },
+	{ 0, 0 }
+};
+
+static int new_imagebox( lua_State* L )
+{
+	// image as parameter
+	uiImage *i = NULL;
+	if( ! lua_isnoneornil( L, 1 ) )
+	{
+		i = check_image( L, 1 );
+	}
+
+	uiImageBox* b = uiNewImageBox( i );
+	object_create( L, b, uiImageBoxSignature, control_common, imagebox_functions, 0 );
+	return 1;
+}
+
 
 static int tab_append( lua_State* L )
 {
 	uiTab* t = (uiTab*) check_object( L, 1, uiTabSignature );
-	uiControl* c = check_object( L, 3, uiControlSignature );
+	uiControl* c = check_control( L, 3, 0 );
 	uiTabAppend( t, luaL_checkstring( L, 2 ), c );
-	if( luaL_checkboolean( L, 4 ) )
+	if( lua_isboolean( L, 4 ) )
 	{
 		uiTabSetMargined( t, uiTabNumPages( t ) - 1, lua_toboolean( L, 4 ) );
 	}
@@ -293,7 +348,7 @@ static int tab_append( lua_State* L )
 static int tab_insert( lua_State* L )
 {
 	uiTab* t = (uiTab*) check_object( L, 1, uiTabSignature );
-	uiControl* c = check_object( L, 4, uiControlSignature );
+	uiControl* c = check_control( L, 4, 0 );
 	uiTabInsertAt( t, luaL_checkstring( L, 3 ), luaL_checkinteger( L, 2 ), c );
 	lua_pushvalue( L, 1 );
 	return 1;
@@ -351,7 +406,7 @@ DECLARE_SETTER( uiGroup, SetMargined, boolean )
 static int group_setchild( lua_State* L )
 {
 	uiGroup* g = (uiGroup*) check_object( L, 1, uiGroupSignature );
-	uiControl* c = check_object( L, 2, uiControlSignature );
+	uiControl* c = check_control( L, 2, 0 );
 	uiGroupSetChild( g, c );
 	lua_pushvalue( L, 1 );
 	return 1;
@@ -418,7 +473,7 @@ static int new_progress( lua_State* L )
 {
 	uiProgressBar* p = uiNewProgressBar();
 	object_create( L, p, uiProgressBarSignature, control_common, progress_functions, 0 );
-	if( luaL_checkinteger( L, 1 ) )
+	if( lua_isinteger( L, 1 ) )
 	{
 		uiProgressBarSetValue( p, lua_tointeger( L, 1 ) );
 	}
@@ -709,7 +764,7 @@ int l_uiFormAppend( lua_State* L )
 	uiFormAppend( 
 		(uiForm*) check_object( L, 1, uiFormSignature ),
 		luaL_checkstring( L, 2 ),
-		check_object( L, 3, uiControlSignature ),
+		check_control( L, 3, 0 ),
 		lua_toboolean( L, 4 ) );
 	lua_pushvalue( L, 1 );
 	return 1;
@@ -732,7 +787,7 @@ static int new_form( lua_State* L )
 {
 	uiForm* f = uiNewForm();
 	object_create( L, f, uiFormSignature, control_common, form_functions, 0 );
-	if( luaL_checkboolean( L, 1 ) )
+	if( lua_isboolean( L, 1 ) )
 	{
 		uiFormSetPadded( f, lua_toboolean( L, 1 ) );
 	}
@@ -743,7 +798,7 @@ static int new_form( lua_State* L )
 int l_uiGridAppend( lua_State* L )
 {
 	uiGrid* g = (uiGrid*) check_object( L, 1, uiGridSignature );
-	uiControl* c = check_object( L, 2, uiControlSignature );
+	uiControl* c = check_control( L, 2, 0 );
 	int left = luaL_checkinteger( L, 3 );
 	int top = luaL_checkinteger( L, 4 );
 	int xspan = luaL_optinteger( L, 5, 1 );
@@ -778,7 +833,7 @@ static int new_grid( lua_State* L )
 {
 	uiGrid* g = uiNewGrid();
 	object_create( L, g, uiGridSignature, control_common, grid_functions, 0 );
-	if( luaL_checkboolean( L, 1 ) )
+	if( lua_isboolean( L, 1 ) )
 	{
 		uiGridSetPadded( g, lua_toboolean( L, 1 ) );
 	}
@@ -797,6 +852,7 @@ luaL_Reg controls_functions[] =
 	{ "NewSearchEntry", new_search_entry },
 	{ "NewCheckbox", new_checkbox },
 	{ "NewLabel", new_label },
+	{ "NewImageBox", new_imagebox },
 	{ "NewTab", new_tab },
 	{ "NewGroup", new_group },
 	{ "NewSpinbox", new_spinbox },
