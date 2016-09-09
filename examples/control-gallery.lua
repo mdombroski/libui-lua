@@ -118,11 +118,30 @@ choosers:Append( ui.NewVBox( true ):Append( ui.NewGrid( true )
 			:Append( ui.NewButton( "Message Box" ):OnClicked( function() ui.MsgBox( window, "This is a normal message box.", "More detailed information can be shown here." ) end ), 0, 0 )
 			:Append( ui.NewButton( "Error Box" ):OnClicked( function() ui.MsgBox( window, "This message box describes an error.", "More detailed information can be shown here." ) end ), 1, 0 ), 0, 2, 2, 1, 0, ui.AlignCenter, ui.AlignStart ) ), true )
 
+local areabox = ui.NewVBox( true )
+local area = ui.NewArea( nil )
+area.Draw = function( area, dc, rect )
+	local path = ui.Draw.Path( ui.Draw.FillMode.Winding )
+	path:NewFigure( 10 + rect.x, 10 + rect.y )
+	path:LineTo( 10 + rect.x, rect.y + rect.h - 10 )
+	path:LineTo( rect.x + rect.w - 10, rect.y + rect.h - 10 )
+	path:LineTo( rect.x + rect.w - 10, 10 + rect.y )
+	path:CloseFigure()
+	path:End()
+	dc:Stroke( path, ui.Draw.Brush():rgba( { g = 1, a = 0.5 } ), { join = ui.Draw.Line.Join.Round, thickness = 20 } )
+	dc:Fill( path, ui.Draw.Brush():linear( { { x = 0, y = 0 }, { x = rect.w, y = rect.h } }, { { pos = 0, b = 1, a = 0.5 }, { pos = 1, r = 1, a = 0.5 } } ) )
+	
+	dc:Transform( ui.Draw.Matrix.Identity():Translate( rect.w / 4, rect.h / 4 ) )
+	dc:Transform( ui.Draw.Matrix.Identity():Rotate( 0, 0, math.pi / 4 ) )
+	dc:Text( ui.Draw.TextLayout( "Hello World", ui.Draw.Font( { family = "Arial", size = 40 } ), -1 ):SetColour( 0, 15, {} ), 0, 0 )
+end
+areabox:Append( area, true )
 
 local tab = ui.NewTab()
 tab:Append( "Basic Controls", basic, true )
 tab:Append( "Numbers and Lists", lists, true )
 tab:Append( "Data Choosers", choosers, true )
+tab:Append( "Area", areabox, true )
 window:SetChild( tab )
 
 
