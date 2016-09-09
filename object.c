@@ -57,6 +57,10 @@ void* object_create( lua_State* L, void* object, int signature, ... )
     lua_pushinteger( L, signature );
     lua_setfield( L, -2, "__libui_signature" );
 
+	// allow objects to override the __gc metamethod
+	lua_pushcfunction( L, object_gc );
+	lua_setfield( L, -2, "__gc" );
+
     // variable list of meta functions
     va_list ap;
     va_start( ap, signature );
@@ -69,9 +73,6 @@ void* object_create( lua_State* L, void* object, int signature, ... )
             break;
     }
     va_end(ap);
-
-    lua_pushcfunction( L, object_gc );
-    lua_setfield( L, -2, "__gc" );
 
 	lua_pushvalue( L, -1 );
 	lua_setfield( L, -2, "__index" );
@@ -177,6 +178,12 @@ void* get_object( lua_State* L, int idx, int* signature )
 	return o;
 }
 
+void* get_object_unsafe( lua_State* L, int idx )
+{
+	void** p = lua_touserdata( L, idx );
+	return *p;
+}
+
 void* check_object( lua_State* L, int idx, int signature )
 {
 	int s = 0;
@@ -257,4 +264,45 @@ int is_object( lua_State* L, int idx, int signature )
 
 	// signature mismatch
 	return 0;
+}
+
+
+// get object userdata from registry, with a meta function
+void object_retreive_with_function( lua_State* L, void* obj, char const* metafunction )
+{
+	lua_pushlightuserdata( L, obj );
+	lua_gettable( L, LUA_REGISTRYINDEX );
+
+	// object not registered, can't continue
+	if( ! lua_istable( L, -1 ) )
+	{
+		lua_pop( L, 1 );
+		luaL_error( L, "Object is not registered" );
+	}
+
+	// get function table, pop previous table
+	lua_getfield( L, -1, "meta" );
+	lua_rotate( L, -2, 1 );
+	lua_pop( L, 1 );
+
+	// meta table not valid, can't continue
+	if( ! lua_istable( L, -1 ) )
+	{
+		lua_pop( L, 1 );
+		luaL_error( L, "Object meta table invalid" );
+	}
+
+	// check that the function is valid in the caller
+	lua_getfield( L, -1, metafunction );
+
+	// construct area object for use in function call
+	lua_rotate( L, -2, 1 );
+	void** p = lua_newuserdata( L, sizeof(obj) );
+	*p = obj;
+	lua_rotate( L, -2, 1 );
+	lua_setmetatable( L, -2 );
+	lua_rotate( L, -2, 1 );
+
+	// stack is now: function, object
+	lua_rotate( L, -2, 1 );
 }

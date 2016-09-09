@@ -16,9 +16,14 @@ typedef double number;
 void* object_create( lua_State* L, void* object, int signature, ... );
 int object_copy( lua_State* L, void* object );
 void* get_object( lua_State* L, int idx, int* signature );
+void* get_object_unsafe( lua_State* L, int idx );
 void* check_object( lua_State* L, int idx, int signature );
 int is_object( lua_State* L, int idx, int signature );
 int object_gc( lua_State* L );
+
+// get object userdata from registry, with a meta function
+// suitable for use with lua_call()
+void object_retreive_with_function( lua_State* L, void* obj, char const* metafunction );
 
 
 
