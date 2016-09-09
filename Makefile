@@ -1,7 +1,7 @@
 TARGET = libui/core.so
 
-CFLAGS = -fPIC
-LDFLAGS = -shared -s
+CFLAGS = -fPIC -g
+LDFLAGS = -shared
 
 SRC = libui-lua.c
 
@@ -17,7 +17,7 @@ else
     LDFLAGS += -L../libui/out -rpath=../libui/out -lui
 endif
 
-SRC = libui-lua.c callback.c control-common.c controls.c menu.c object.c image.c
+SRC = libui-lua.c callback.c control-common.c controls.c menu.c object.c image.c area.c draw.c
 OBJ = $(SRC:%.c=%.o)
 
 
@@ -25,7 +25,7 @@ all: $(TARGET)
 
 %.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)
- 
+
 $(TARGET): $(OBJ)
 	mkdir -p libui
 	$(LD) -o $(TARGET) $(OBJ) $(LDFLAGS)

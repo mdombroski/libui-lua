@@ -9,6 +9,8 @@
 #include "menu.h"
 #include "controls.h"
 #include "image.h"
+#include "area.h"
+#include "draw.h"
 
 #ifndef MODULE_API
 #define MODULE_API __attribute__((visibility("default")))
@@ -55,6 +57,7 @@ static int invoke_timeout( void* data )
 		int status = lua_toboolean( L, -1 );
 		lua_pop( L, 1 );
 		if (status)
+			// reschedule
 			return 1;
 	}
 
@@ -103,30 +106,6 @@ static int l_uiOnShouldQuit( lua_State* L )
 		uiOnShouldQuit( callback_uiShouldQuit, L );
 
 	return 0;
-}
-
-
-static luaL_Reg area_functions[] =
-{
-	{ 0, 0 }
-};
-
-static int new_area( lua_State* L )
-{
-	// TODO
-	uiArea* a;
-	uiAreaHandler* ah = 0; // required
-	if( lua_isinteger( L, 2 ) && lua_isinteger( L, 3 ) )
-	{
-		a = uiNewScrollingArea( ah, lua_tointeger( L, 2 ), lua_tointeger( L, 3 ) );
-	}
-	else
-	{
-		a = uiNewArea( ah );
-	}
-
-	object_create( L, a, uiAreaSignature, control_common, area_functions, 0 );
-	return 1;
 }
 
 
@@ -209,6 +188,9 @@ MODULE_API int luaopen_libui_core( lua_State* L )
 	luaL_setfuncs( L, image_functions, 0 );
 	luaL_setfuncs( L, controls_functions, 0 );
 	luaL_setfuncs( L, menu_functions, 0 );
+	luaL_setfuncs( L, area_functions, 0 );
+
+	draw_init( L );
 
 	// these are the alignment/positioning enums for uiGrid
 	lua_pushinteger( L, uiAlignFill );
