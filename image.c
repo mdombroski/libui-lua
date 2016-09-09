@@ -63,7 +63,6 @@ static int l_Resize( lua_State* L )
 
 static int l_Destroy( lua_State* L )
 {
-	printf( "gc image\n" );
 	uiImage *i = (uiImage*) check_object( L, 1, uiImageSignature );
 	uiImageDestroy( i );
 	return 0;
