@@ -102,6 +102,13 @@ static int l_draw_text( lua_State* L )
 	return 1;
 }
 
+static int l_draw_image( lua_State* L )
+{
+	uiDrawImage( check_context( L, 1 ), luaL_checknumber( L, 3 ), luaL_checknumber( L, 4 ), check_image( L, 2 ) );
+	lua_pushvalue( L, 1 );
+	return 1;
+}
+
 static luaL_Reg context_functions[] =
 {
 	{ "Stroke", l_draw_stroke },
@@ -111,6 +118,7 @@ static luaL_Reg context_functions[] =
 	{ "Save", l_draw_save },
 	{ "Restore", l_draw_restore },
 	{ "Text", l_draw_text },
+	{ "Image", l_draw_image },
 	{ 0, 0 }
 };
 
