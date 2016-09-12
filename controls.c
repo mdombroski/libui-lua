@@ -4,6 +4,7 @@
 #include "callback.h"
 #include "control-common.h"
 #include "image.h"
+#include "draw.h"
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -691,8 +692,20 @@ static int new_nonwrapping_multilineentry( lua_State* L )
 }
 
 
+static int l_uiFontButtonFont( lua_State* L )
+{
+	uiFontButton* fb = check_object( L, 1, uiFontButtonSignature );
+	uiDrawTextFont* f = uiFontButtonFont( fb );
+
+	return draw_new_font( L, f );
+}
+
+DECLARE_CALLBACK( uiFontButton, OnChanged )
+
 static luaL_Reg fontbutton_functions[] =
 {
+	{ "Font", l_uiFontButtonFont },
+	{ "OnChanged", l_uiFontButtonOnChanged },
 	{ 0, 0 }
 };
 

@@ -431,6 +431,15 @@ static luaL_Reg font_functions[] =
 	{ 0, 0 }
 };
 
+int draw_new_font( lua_State* L, uiDrawTextFont* font )
+{
+	if( font )
+		object_create( L, font, uiDrawTextFontSignature, font_functions, 0 );
+	else
+		lua_pushnil( L );
+	return 1;
+}
+
 static int new_font( lua_State* L )
 {
 	uiDrawTextFontDescriptor descriptor;
@@ -450,11 +459,7 @@ static int new_font( lua_State* L )
 	// font family name is now invalid
 	lua_pop( L, 1 );
 
-	if( font )
-		object_create( L, font, uiDrawTextFontSignature, font_functions, 0 );
-	else
-		lua_pushnil( L );
-	return 1;
+	return draw_new_font( L, font );
 }
 
 
