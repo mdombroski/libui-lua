@@ -12,13 +12,17 @@
 #include "area.h"
 #include "draw.h"
 
-#ifndef MODULE_API
-#define MODULE_API __attribute__((visibility("default")))
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef MODULE_API
+# ifdef _WIN32
+#  define MODULE_API __declspec(dllexport)
+# else
+#  define MODULE_API __attribute__((visibility("default")))
+# endif
+#endif
 
 
 static uiInitOptions init_options;
