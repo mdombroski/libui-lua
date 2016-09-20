@@ -4,9 +4,9 @@
 #include <lua.h>
 #include <lauxlib.h>
 
-// private header?
 #include <ui.h>
-#include <common/controlsigs.h>
+
+#include "signatures.h"
 
 int is_control( int signature );
 uiControl* check_control( lua_State* L, int idx, int signature );

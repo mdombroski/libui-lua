@@ -5,9 +5,6 @@
 #include "control-common.h"
 #include "image.h"
 
-#include <lua.h>
-#include <lauxlib.h>
-
 #include <ui.h>
 
 #include <stdlib.h>

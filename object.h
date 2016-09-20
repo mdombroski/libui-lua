@@ -3,6 +3,7 @@
 
 #include <lua.h>
 #include <lauxlib.h>
+#include "lua-compat.h"
 
 // simplifies getters/setters
 #define luaL_checkboolean( L, i ) lua_toboolean( L, i )

@@ -1,6 +1,3 @@
-#include <lua.h>
-#include <lauxlib.h>
-
 #include <ui.h>
 
 #include "object.h"

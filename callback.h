@@ -2,6 +2,8 @@
 #define CALLBACK_H
 
 #include <lua.h>
+#include "lua-compat.h"
+
 #include "object.h"
 
 enum
