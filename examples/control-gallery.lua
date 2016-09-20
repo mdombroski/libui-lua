@@ -1,4 +1,4 @@
-local ui = require "libui.core"
+local ui = require "libui"
 
 local menu = ui.NewMenu( "File" )
 menu:AppendItem( "Open" )
@@ -33,7 +33,7 @@ local menu = ui.NewMenu( "Help" )
 menu:AppendItem( "Help" )
 menu:AppendAboutItem()
         :OnClicked( function()
-            local w = ui.NewWindow( "About", 320, 120 ):SetMargined( true )
+			local w = ui.NewWindow( "About", 320, 120 ):SetMargined( true ):SetIcon( ui.NewImage( "examples/text-x-lua.png" ) )
             w:SetChild(
                 ui.NewVBox()
                     :Append( ui.NewHBox():Append( ui.NewLabel( "LibUI Widget Gallery (Lua)\r\n\r\nAuthor: M. Dombroski" ), true ), true )
@@ -118,8 +118,13 @@ choosers:Append( ui.NewVBox( true ):Append( ui.NewGrid( true )
 			:Append( ui.NewButton( "Message Box" ):OnClicked( function() ui.MsgBox( window, "This is a normal message box.", "More detailed information can be shown here." ) end ), 0, 0 )
 			:Append( ui.NewButton( "Error Box" ):OnClicked( function() ui.MsgBox( window, "This message box describes an error.", "More detailed information can be shown here." ) end ), 1, 0 ), 0, 2, 2, 1, 0, ui.AlignCenter, ui.AlignStart ) ), true )
 
+
+
 local areabox = ui.NewVBox( true )
 local area = ui.NewArea( nil )
+local fbutton = ui.NewFontButton()
+area.font = fbutton:Font()
+
 area.Draw = function( area, dc, rect )
 	local path = ui.Draw.Path( ui.Draw.FillMode.Winding )
 	path:NewFigure( 10 + rect.x, 10 + rect.y )
@@ -130,12 +135,17 @@ area.Draw = function( area, dc, rect )
 	path:End()
 	dc:Stroke( path, ui.Draw.Brush():rgba( { g = 1, a = 0.5 } ), { join = ui.Draw.Line.Join.Round, thickness = 20 } )
 	dc:Fill( path, ui.Draw.Brush():linear( { { x = 0, y = 0 }, { x = rect.w, y = rect.h } }, { { pos = 0, b = 1, a = 0.5 }, { pos = 1, r = 1, a = 0.5 } } ) )
-	
+
+	dc:Image( ui.NewImage( "examples/text-x-lua.png" ), 20, 20 )
+
 	dc:Transform( ui.Draw.Matrix.Identity():Translate( rect.w / 4, rect.h / 4 ) )
 	dc:Transform( ui.Draw.Matrix.Identity():Rotate( 0, 0, math.pi / 4 ) )
-	dc:Text( ui.Draw.TextLayout( "Hello World", ui.Draw.Font( { family = "Arial", size = 40 } ), -1 ):SetColour( 0, 15, {} ), 0, 0 )
+	dc:Text( ui.Draw.TextLayout( "Hello World", area.font, -1 ):SetColour( 0, 15, {} ), 0, 0 )
 end
+fbutton:OnChanged( function( fb ) area.font = fb:Font() area:QueueRedrawAll() end )
+areabox:Append( fbutton )
 areabox:Append( area, true )
+
 
 local tab = ui.NewTab()
 tab:Append( "Basic Controls", basic, true )

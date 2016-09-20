@@ -1,7 +1,7 @@
 cmake_minimum_required( VERSION 2.8.8 )
 project( libui-lua )
 
-SET( LUA_VERSION 5.1 )
+SET( LUA_VERSION 5.3 )
 
 SET( LUA_DIR "" )
 if( WIN32 )
@@ -29,8 +29,8 @@ set( libui-lua-sources callback.c control-common.c controls.c image.c libui-lua.
 
 include_directories( ${LUA_INCLUDES} ${LIBUI_INCLUDES} )
 
-add_library( core SHARED ${libui-lua-sources} )
-set_target_properties( core PROPERTIES PREFIX "" )
-target_link_libraries( core ${LIBUI_LIBRARY} ${LUA_LIBRARY} )
+add_library( libui SHARED ${libui-lua-sources} )
+set_target_properties( libui PROPERTIES PREFIX "" )
+target_link_libraries( libui ${LIBUI_LIBRARY} ${LUA_LIBRARY} )
 
-set_target_properties( core PROPERTIES COMPILE_FLAGS "-fvisibility=hidden" )
+set_target_properties( libui PROPERTIES COMPILE_FLAGS "-fvisibility=hidden" )

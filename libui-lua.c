@@ -171,7 +171,7 @@ luaL_Reg ui_functions[] =
 };
 
 
-MODULE_API int luaopen_libui_core( lua_State* L )
+MODULE_API int luaopen_libui( lua_State* L )
 {
 	char const* err;
 
